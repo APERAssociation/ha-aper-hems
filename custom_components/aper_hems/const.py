@@ -27,6 +27,16 @@ COVERAGE_API_URL = f"{API_BASE_URL}/api/energydata/coverage"
 SLOT_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 CONSUMER_NAME_LENGTH = 100
 
+# Weather of each quarter of an hour, fetched from Home Assistant so that each home has its own Open-Meteo quota.
+# Free for non-commercial use, data under CC BY 4.0 (Open-Meteo.com).
+WEATHER_API_URL = "https://api.open-meteo.com/v1/forecast"
+WEATHER_VARIABLES = (
+    "temperature_2m,apparent_temperature,wind_speed_10m,uv_index,relative_humidity_2m,"
+    "surface_pressure,precipitation,cloud_cover,weather_code"
+)
+# The forecast API keeps about three months of past data
+WEATHER_MAX_PAST_DAYS = 90
+
 BACKFILL_DAYS = 45
 BACKFILL_MAX_RETRIES = 2
 BACKFILL_INTERVAL_HOURS = 6

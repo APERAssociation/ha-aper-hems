@@ -44,7 +44,7 @@ Les réglages se modifient ensuite par **⋮ → Reconfigurer**.
 
 ## Données envoyées
 
-Uniquement les valeurs des capteurs choisis, agrégées par quart d'heure, et la position de votre domicile arrondie à environ 1 km (pour la météo), vers `aper-association.ch`, avec votre clé API.
+Uniquement les valeurs des capteurs choisis et la météo de votre domicile, agrégées par quart d'heure, vers `aper-association.ch`, avec votre clé API. Votre position ne quitte Home Assistant que vers Open-Meteo, arrondie à environ 1 km, pour obtenir la météo.
 Aucune autre donnée de Home Assistant n'est transmise.
 
-La météo de chaque quart d'heure est ajoutée par le Cockpit : données [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0).
+Météo : données [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0), demandées par votre Home Assistant.

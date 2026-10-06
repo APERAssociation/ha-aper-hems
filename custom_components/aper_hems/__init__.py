@@ -44,6 +44,9 @@ from .const import (
     COVERAGE_API_URL,
     DOMAIN,
     SLOT_FORMAT,
+    WEATHER_API_URL,
+    WEATHER_MAX_PAST_DAYS,
+    WEATHER_VARIABLES,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -208,6 +211,46 @@ async def _get_history(hass, start, end, entity_id, use_delta=False):
     return _aggregate_15min(raw, start, end)
 
 
+def _weather_15min(data: dict, period_start: datetime, period_end: datetime) -> list[dict]:
+    """Open-Meteo "minutely_15" answer (GMT) -> one point per 15-min bucket.
+
+    Values at the start of the bucket; rain over the hour that ends with the bucket
+    (Open-Meteo gives the rain of the 15 minutes BEFORE each time).
+    """
+    series = data.get("minutely_15") or {}
+    index = {t: i for i, t in enumerate(series.get("time") or [])}
+
+    def value(name, i):
+        values = series.get(name) or []
+        return values[i] if i is not None and i < len(values) else None
+
+    result = []
+    bucket_dt = _bucket_start(period_start)
+    while bucket_dt < period_end:
+        i = index.get(bucket_dt.strftime("%Y-%m-%dT%H:%M"))
+        if i is not None:
+            rain = None
+            for minutes in (-30, -15, 0, 15):
+                j = index.get((bucket_dt + timedelta(minutes=minutes)).strftime("%Y-%m-%dT%H:%M"))
+                mm = value("precipitation", j)
+                if mm is not None:
+                    rain = (rain or 0) + mm
+            result.append({
+                "timestamp": bucket_dt.isoformat(),
+                "temperature": value("temperature_2m", i),
+                "feelsLike": value("apparent_temperature", i),
+                "windSpeed": value("wind_speed_10m", i),
+                "uvIndex": value("uv_index", i),
+                "humidity": value("relative_humidity_2m", i),
+                "pressure": value("surface_pressure", i),
+                "precipitationLastHour": round(rain, 2) if rain is not None else None,
+                "cloudCover": value("cloud_cover", i),
+                "weatherCode": int(value("weather_code", i)) if value("weather_code", i) is not None else None,
+            })
+        bucket_dt += timedelta(minutes=BUCKET_MINUTES)
+    return result
+
+
 def _unit(hass, entity_id, default=""):
     state = hass.states.get(entity_id) if entity_id else None
     if state is None:
@@ -283,6 +326,41 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
     session = async_get_clientsession(hass)
     headers = {"Authorization": f"Bearer {api_key}"}
 
+    async def _get_weather(start: datetime, end: datetime) -> list[dict]:
+        """Weather at the home from Open-Meteo, per quarter of an hour. Without it the measurements are still sent.
+
+        Only the location rounded to about 1 km leaves Home Assistant, and only towards Open-Meteo.
+        """
+        latitude, longitude = hass.config.latitude, hass.config.longitude
+        if latitude is None or longitude is None:
+            return []
+        start = max(start, dt_util.utcnow() - timedelta(days=WEATHER_MAX_PAST_DAYS))
+        if start >= end:
+            return []
+        params = {
+            "latitude": f"{latitude:.2f}",
+            "longitude": f"{longitude:.2f}",
+            "minutely_15": WEATHER_VARIABLES,
+            "timezone": "GMT",
+            # One hour earlier for the rain of the last hour
+            "start_date": (start - timedelta(hours=1)).strftime("%Y-%m-%d"),
+            "end_date": (end + timedelta(minutes=BUCKET_MINUTES)).strftime("%Y-%m-%d"),
+        }
+        try:
+            async with session.get(
+                WEATHER_API_URL, params=params, timeout=aiohttp.ClientTimeout(total=20)
+            ) as resp:
+                if resp.status != 200:
+                    _LOGGER.warning("Open-Meteo error %s", resp.status)
+                    return []
+                data = await resp.json()
+        except asyncio.CancelledError:
+            raise
+        except (aiohttp.ClientError, asyncio.TimeoutError, OSError, ValueError) as err:
+            _LOGGER.warning("Open-Meteo unreachable: %s", type(err).__name__)
+            return []
+        return _weather_15min(data, start, end)
+
     async def _collect(start: datetime, end: datetime) -> dict:
         """Measurements between two UTC dates, per quarter of an hour, in the format of /api/energydata.
 
@@ -337,9 +415,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
             soc_history = await _get_history(hass, start, end, battery_soc_entity)
 
         payload = {
-            # Home location, rounded to about 1 km: the server adds the weather of each quarter of an hour
-            "latitude": round(hass.config.latitude, 2),
-            "longitude": round(hass.config.longitude, 2),
+            "weatherHistory": await _get_weather(start, end),
             "productionUnit": prod_unit,
             "productionHistory": prod_history,
             "importUnit": grid_unit,
