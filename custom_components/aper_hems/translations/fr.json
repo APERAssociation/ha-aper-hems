@@ -1,0 +1,124 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "APER HEMS — Installation",
+        "description": "Quel type d'installation avez-vous ?",
+        "data": {
+          "profile": "Type d'installation"
+        }
+      },
+      "equipment": {
+        "title": "APER HEMS — Matériel",
+        "description": "Sélectionnez le matériel que vous utilisez. Le plugin va chercher automatiquement les bons capteurs.",
+        "data": {
+          "brands": "Matériel installé"
+        }
+      },
+      "entities": {
+        "title": "APER HEMS — Capteurs détectés",
+        "description": "Vérifiez les capteurs détectés automatiquement. Vous pouvez les modifier si nécessaire.",
+        "data": {
+          "grid_entity": "Capteur réseau (grid)",
+          "production_entity": "Capteur production solaire",
+          "consumption_entity": "Capteur consommation",
+          "add_battery_entity": "Capteur charge batterie",
+          "out_battery_entity": "Capteur décharge batterie",
+          "soc_entity": "Niveau batterie (%)"
+        },
+        "data_description": {
+          "grid_entity": "Puissance réseau — positif = import, négatif = export (ex: sensor.whatwatt_go_power_in)",
+          "production_entity": "Puissance produite par vos panneaux (ex: sensor.fronius_power)",
+          "consumption_entity": "Puissance totale consommée par la maison (optionnel, calculée si absente)",
+          "add_battery_entity": "Puissance de charge de la batterie (optionnel)",
+          "out_battery_entity": "Puissance de décharge de la batterie (optionnel)",
+          "soc_entity": "Niveau de charge de la batterie en % (optionnel)"
+        }
+      },
+      "api": {
+        "title": "APER HEMS — Connexion",
+        "description": "Entrez la clé API fournie par l'APER (créée depuis l'administration de aper-association.ch).",
+        "data": {
+          "api_key": "Clé API",
+          "update_interval": "Fréquence d'envoi"
+        },
+        "data_description": {
+          "api_key": "Votre clé API personnelle",
+          "update_interval": "Fréquence d'envoi des données en minutes (15 min recommandé)"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigurer APER HEMS",
+        "description": "Modifiez les paramètres de votre intégration. Les champs avancés (compteurs, polarité) sont optionnels.",
+        "data": {
+          "grid_entity": "Capteur réseau (grid)",
+          "grid_import_positive": "Import réseau = valeur positive",
+          "production_entity": "Capteur production solaire",
+          "consumption_entity": "Capteur consommation",
+          "battery_entity": "Batterie (entité signée unique)",
+          "add_battery_entity": "Capteur charge batterie",
+          "out_battery_entity": "Capteur décharge batterie",
+          "soc_entity": "Niveau batterie (%)",
+          "battery_charge_positive": "Charge batterie = valeur positive",
+          "meter_production": "Compteur énergie production (kWh)",
+          "meter_import": "Compteur énergie import (kWh)",
+          "meter_export": "Compteur énergie export (kWh)",
+          "meter_battery_charge": "Compteur énergie charge batterie (kWh)",
+          "meter_battery_discharge": "Compteur énergie décharge batterie (kWh)",
+          "update_interval": "Fréquence d'envoi",
+          "api_key": "Clé API"
+        },
+        "data_description": {
+          "grid_entity": "Puissance réseau — positif = import, négatif = export",
+          "grid_import_positive": "Décocher si votre capteur réseau est inversé (positif = export)",
+          "production_entity": "Puissance produite par vos panneaux",
+          "consumption_entity": "Puissance totale consommée (optionnel)",
+          "battery_entity": "Alternative aux champs charge/décharge séparés — entité unique avec valeur signée (+ charge, - décharge)",
+          "add_battery_entity": "Puissance de charge de la batterie (optionnel)",
+          "out_battery_entity": "Puissance de décharge de la batterie (optionnel)",
+          "soc_entity": "Niveau de charge en % (optionnel)",
+          "battery_charge_positive": "Décocher si votre capteur batterie est inversé",
+          "meter_production": "Compteur cumulatif kWh — prioritaire sur le capteur puissance si renseigné",
+          "meter_import": "Compteur cumulatif kWh import réseau — prioritaire sur le capteur grid si renseigné",
+          "meter_export": "Compteur cumulatif kWh export réseau — prioritaire sur le capteur grid si renseigné",
+          "meter_battery_charge": "Compteur cumulatif kWh charge batterie",
+          "meter_battery_discharge": "Compteur cumulatif kWh décharge batterie",
+          "update_interval": "Fréquence d'envoi des données en minutes (15 min recommandé)",
+          "api_key": "Votre clé API APER"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Clé API refusée. Vérifiez-la ou demandez-en une nouvelle à l'APER.",
+      "cannot_connect": "Impossible de joindre aper-association.ch. Réessayez dans un moment."
+    },
+    "abort": {
+      "already_configured": "Cette clé API est déjà configurée.",
+      "reconfigure_successful": "Configuration enregistrée."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Consommateurs",
+        "description": "{consumers_list}",
+        "data": {
+          "action": "Action"
+        }
+      },
+      "add_consumer": {
+        "title": "Ajouter un consommateur",
+        "data": {
+          "consumer_entity": "Entité",
+          "consumer_name": "Nom affiché",
+          "consumer_category": "Catégorie"
+        },
+        "data_description": {
+          "consumer_entity": "Capteur de puissance ou compteur d'énergie du consommateur (ex: borne VE, PAC, piscine…)",
+          "consumer_name": "Nom qui apparaîtra dans le cockpit (100 caractères au plus)",
+          "consumer_category": "Type de consommateur pour le classement"
+        }
+      }
+    }
+  }
+}
