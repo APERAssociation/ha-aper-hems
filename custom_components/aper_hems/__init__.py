@@ -590,12 +590,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
                     _LOGGER.info("Backfill: pas de données recorder pour %s→%s", r_start, r_end)
                     continue
 
-                if await _post(payload):
-                    _LOGGER.info("Backfill OK: %s → %s (%d points)", r_start, r_end,
-                                 len(payload["productionHistory"]))
-                else:
+                # Sent again until it is complete, but only a few times: without weather (Open-Meteo
+                # unavailable, no location in Home Assistant) the server keeps asking for these slots
+                if not await _post(payload) or not payload["weatherHistory"]:
                     for sl in range_slots:
                         failures[sl] = failures.get(sl, 0) + 1
+                else:
+                    _LOGGER.info("Backfill OK: %s → %s (%d points)", r_start, r_end,
+                                 len(payload["productionHistory"]))
 
             except Exception as err:  # noqa: BLE001 - one bad range must not stop the others
                 _LOGGER.error("Backfill error %s→%s: %s", r_start, r_end, err)
