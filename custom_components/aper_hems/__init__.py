@@ -7,6 +7,7 @@ Live sending and charging station control are not part of it: the APER site does
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from datetime import datetime, timedelta
 
@@ -15,9 +16,9 @@ import aiohttp
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.history import state_changes_during_period
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -29,6 +30,7 @@ from .const import (
     CONF_BATTERY_CHARGE_POSITIVE,
     CONF_BATTERY_ENTITY,
     CONF_BATTERY_SOC_ENTITY,
+    CONF_CONSUMER_POWER_ENTITY,
     CONF_CONSUMERS,
     CONF_GRID_ENTITY,
     CONF_GRID_IMPORT_POSITIVE,
@@ -43,6 +45,10 @@ from .const import (
     CONSUMER_NAME_LENGTH,
     COVERAGE_API_URL,
     DOMAIN,
+    LIVE_HEARTBEAT_SECONDS,
+    LIVE_RECONNECT_MAX_SECONDS,
+    LIVE_RECONNECT_MIN_SECONDS,
+    LIVE_WS_URL,
     SLOT_FORMAT,
     WEATHER_API_URL,
     WEATHER_MAX_PAST_DAYS,
@@ -602,6 +608,137 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
             except Exception as err:  # noqa: BLE001 - one bad range must not stop the others
                 _LOGGER.error("Backfill error %s→%s: %s", r_start, r_end, err)
 
+    def _read_number(entity_id):
+        """Current value of an entity, or None if unknown."""
+        state = hass.states.get(entity_id) if entity_id else None
+        if state is None or state.state in ("unavailable", "unknown", ""):
+            return None
+        try:
+            return float(state.state)
+        except (ValueError, TypeError):
+            return None
+
+    def _read_power_w(entity_id):
+        """Current power of an entity in watts, or None."""
+        value = _read_number(entity_id)
+        if value is None:
+            return None
+        unit = (hass.states.get(entity_id).attributes.get("unit_of_measurement") or "").lower().strip()
+        return value * 1000 if unit == "kw" else value
+
+    def _live_values() -> dict:
+        """Instantaneous values, in W: grid positive = import, battery positive = charge."""
+        grid = _read_power_w(grid_entity)
+        if grid is not None and not grid_import_positive:
+            grid = -grid
+
+        consumers_live = []
+        for consumer in entry.options.get(CONF_CONSUMERS, []):
+            power_eid = consumer.get(CONF_CONSUMER_POWER_ENTITY)
+            if not power_eid:
+                # The main entity is used when it is a power sensor, not an energy counter
+                if _detect_counter(hass, consumer["entity"], consumer["name"])[0] is False:
+                    power_eid = consumer["entity"]
+            if not power_eid:
+                continue
+            power_w = _read_power_w(power_eid)
+            if power_w is None:
+                continue
+            for sub_eid in consumer.get(CONF_SUBTRACT_ENTITIES, []):
+                sub_w = _read_power_w(sub_eid)
+                if sub_w is not None:
+                    power_w -= sub_w
+            consumers_live.append({
+                "name": consumer["name"],
+                "category": consumer.get("category", "other"),
+                "power": round(max(0, power_w), 1),
+            })
+
+        return {
+            "grid": grid,
+            "production": _read_power_w(production_entity),
+            "battery": _read_power_w(battery_entity),
+            "batterySoc": _read_number(battery_soc_entity),
+            "consumers": consumers_live,
+        }
+
+    # Live: WebSocket kept open to the site. The site says when one of the member's cockpits is open;
+    # values are then sent at each change of a sensor (at most once a second) and every 10 s anyway.
+    live = {"ws": None, "watching": False, "dirty": False, "busy": False, "last_sent": 0.0}
+
+    async def _live_connection():
+        delay = LIVE_RECONNECT_MIN_SECONDS
+        interrupted = False
+        while True:
+            try:
+                async with session.ws_connect(LIVE_WS_URL, headers=headers, heartbeat=30) as ws:
+                    live["ws"] = ws
+                    delay = LIVE_RECONNECT_MIN_SECONDS
+                    if interrupted:
+                        _LOGGER.info("Live : connexion rétablie")
+                        interrupted = False
+                    async for msg in ws:
+                        if msg.type != aiohttp.WSMsgType.TEXT:
+                            continue
+                        try:
+                            message = json.loads(msg.data)
+                        except ValueError:
+                            continue
+                        if message.get("type") == "watch":
+                            live["watching"] = bool(message.get("on"))
+                            live["dirty"] = live["watching"]
+            except asyncio.CancelledError:
+                raise
+            except aiohttp.WSServerHandshakeError as err:
+                if err.status == 401:
+                    _LOGGER.error("APER : clé API refusée pour le live")
+                    delay = LIVE_RECONNECT_MAX_SECONDS
+                elif not interrupted:
+                    _LOGGER.info("Live interrompu (HTTP %s), reprise automatique", err.status)
+                interrupted = True
+            except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as err:
+                # Said once: during an Internet outage this would otherwise fill the log
+                if not interrupted:
+                    _LOGGER.info("Live interrompu (%s), reprise automatique", type(err).__name__)
+                interrupted = True
+            finally:
+                live["ws"] = None
+                live["watching"] = False
+            if not interrupted:
+                # Closed by the site (restart, update): it is usually back within seconds
+                interrupted = True
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, LIVE_RECONNECT_MAX_SECONDS)
+
+    @callback
+    def _live_changed(_event: Event) -> None:
+        live["dirty"] = True
+
+    async def _live_tick(_now=None):
+        ws = live["ws"]
+        if ws is None or ws.closed or not live["watching"] or live["busy"]:
+            return
+        now = hass.loop.time()
+        if not live["dirty"] and now - live["last_sent"] < LIVE_HEARTBEAT_SECONDS:
+            return
+        live["busy"] = True
+        live["dirty"] = False
+        live["last_sent"] = now
+        try:
+            await ws.send_json(_live_values())
+        except (aiohttp.ClientError, ConnectionResetError, RuntimeError):
+            # The connection loop notices the closing and reconnects
+            pass
+        finally:
+            live["busy"] = False
+
+    live_entities = [eid for eid in (grid_entity, production_entity, battery_entity, battery_soc_entity) if eid]
+    for consumer in entry.options.get(CONF_CONSUMERS, []):
+        live_entities.append(consumer.get(CONF_CONSUMER_POWER_ENTITY) or consumer["entity"])
+        live_entities.extend(consumer.get(CONF_SUBTRACT_ENTITIES, []))
+    entry.async_on_unload(async_track_state_change_event(hass, sorted(set(live_entities)), _live_changed))
+    entry.async_on_unload(async_track_time_interval(hass, _live_tick, timedelta(seconds=1)))
+    entry.async_create_background_task(hass, _live_connection(), f"{DOMAIN}_live")
     entry.async_on_unload(async_track_time_interval(hass, _send_data, interval_td))
     entry.async_on_unload(async_track_time_interval(hass, _backfill, timedelta(hours=BACKFILL_INTERVAL_HOURS)))
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))

@@ -7,6 +7,10 @@ les mesures de votre installation au Cockpit APER HEMS :
   (la consommation de la maison est calculée par le Cockpit) ;
 - les consommateurs que vous choisissez (pompe à chaleur, chauffe-eau, borne de recharge…).
 
+Pendant que l'onglet **Live** de votre Cockpit est ouvert, les valeurs instantanées sont aussi transmises en direct.
+C'est Home Assistant qui ouvre la connexion vers le Cockpit : aucun accès à votre Home Assistant n'est donné,
+et il n'a pas besoin d'être accessible depuis Internet.
+
 Les trous (Home Assistant éteint, coupure Internet) sont comblés automatiquement à partir de l'historique de
 Home Assistant, jusqu'à 45 jours en arrière.
 

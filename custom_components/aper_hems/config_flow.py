@@ -29,6 +29,7 @@ from .const import (
     CONF_BATTERY_CHARGE_POSITIVE,
     CONF_BATTERY_ENTITY,
     CONF_BATTERY_SOC_ENTITY,
+    CONF_CONSUMER_POWER_ENTITY,
     CONF_CONSUMERS,
     CONF_GRID_ENTITY,
     CONF_GRID_IMPORT_POSITIVE,
@@ -144,6 +145,8 @@ class AperHemsOptionsFlow(OptionsFlow):
         if consumers:
             def _fmt(c):
                 base = f"• {c['name']} [{cat_labels.get(c.get('category', 'other'), 'Autres')}] ({c['entity']})"
+                if c.get(CONF_CONSUMER_POWER_ENTITY):
+                    base += " ⚡ live"
                 subs = c.get(CONF_SUBTRACT_ENTITIES, [])
                 if subs:
                     base += f" − {len(subs)} entité(s)"
@@ -188,6 +191,9 @@ class AperHemsOptionsFlow(OptionsFlow):
             "name": user_input["consumer_name"].strip(),
             "category": user_input.get("consumer_category", "other"),
         }
+        power_entity = user_input.get(CONF_CONSUMER_POWER_ENTITY)
+        if power_entity:
+            consumer[CONF_CONSUMER_POWER_ENTITY] = power_entity
         subtract = user_input.get(CONF_SUBTRACT_ENTITIES)
         if subtract:
             consumer[CONF_SUBTRACT_ENTITIES] = subtract if isinstance(subtract, list) else [subtract]
@@ -220,6 +226,12 @@ class AperHemsOptionsFlow(OptionsFlow):
                 mode=SelectSelectorMode.DROPDOWN,
             )
         )
+
+        power = EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power"))
+        if d.get(CONF_CONSUMER_POWER_ENTITY):
+            schema[vol.Optional(CONF_CONSUMER_POWER_ENTITY, default=d[CONF_CONSUMER_POWER_ENTITY])] = power
+        else:
+            schema[vol.Optional(CONF_CONSUMER_POWER_ENTITY)] = power
 
         subtract = EntitySelector(EntitySelectorConfig(domain="sensor", multiple=True))
         if d.get(CONF_SUBTRACT_ENTITIES):

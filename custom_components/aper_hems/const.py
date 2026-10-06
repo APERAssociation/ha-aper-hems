@@ -15,6 +15,7 @@ CONF_METER_BATTERY_DISCHARGE = "meter_battery_discharge"
 CONF_BATTERY_CHARGE_POSITIVE = "battery_charge_positive"
 CONF_CONSUMERS = "consumers"
 CONF_SUBTRACT_ENTITIES = "subtract_entities"
+CONF_CONSUMER_POWER_ENTITY = "consumer_power_entity"
 
 DEFAULT_UPDATE_INTERVAL = 15
 
@@ -22,6 +23,12 @@ DEFAULT_UPDATE_INTERVAL = 15
 API_BASE_URL = "https://aper-association.ch"
 API_URL = f"{API_BASE_URL}/api/energydata"
 COVERAGE_API_URL = f"{API_BASE_URL}/api/energydata/coverage"
+# Live values for the cockpit: a WebSocket kept open to the site, which says when a cockpit is watching
+# ("watch" message). Values are then sent at each change (at most once a second) and every 10 s anyway.
+LIVE_WS_URL = "wss://aper-association.ch/api/energydata/live"
+LIVE_HEARTBEAT_SECONDS = 10
+LIVE_RECONNECT_MIN_SECONDS = 5
+LIVE_RECONNECT_MAX_SECONDS = 300
 
 # Quarters of an hour exchanged with the server: UTC, "2026-10-06T10:15:00Z"
 SLOT_FORMAT = "%Y-%m-%dT%H:%M:%SZ"

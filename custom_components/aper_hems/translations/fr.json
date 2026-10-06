@@ -94,12 +94,14 @@
           "consumer_entity": "Entité",
           "consumer_name": "Nom d'affichage",
           "consumer_category": "Catégorie",
+          "consumer_power_entity": "Entité puissance live (W)",
           "subtract_entities": "Entités à soustraire"
         },
         "data_description": {
           "consumer_entity": "Capteur de puissance ou compteur d'énergie du consommateur (ex: borne de recharge, PAC, piscine…)",
           "consumer_name": "Nom qui apparaîtra dans le graphique du cockpit (100 caractères au plus)",
           "consumer_category": "Type d'appareil pour le regroupement dans le cockpit",
+          "consumer_power_entity": "Capteur de puissance instantanée (W/kW) pour l'onglet Live du cockpit — facultatif si l'entité principale est déjà en watts",
           "subtract_entities": "Entités dont la consommation sera soustraite de ce consommateur (pour éviter le double comptage)"
         }
       },
@@ -109,12 +111,14 @@
           "consumer_entity": "Entité",
           "consumer_name": "Nom d'affichage",
           "consumer_category": "Catégorie",
+          "consumer_power_entity": "Entité puissance live (W)",
           "subtract_entities": "Entités à soustraire"
         },
         "data_description": {
           "consumer_entity": "Capteur de puissance ou compteur d'énergie du consommateur (ex: borne de recharge, PAC, piscine…)",
           "consumer_name": "Nom qui apparaîtra dans le graphique du cockpit (100 caractères au plus)",
           "consumer_category": "Type d'appareil pour le regroupement dans le cockpit",
+          "consumer_power_entity": "Capteur de puissance instantanée (W/kW) pour l'onglet Live du cockpit — facultatif si l'entité principale est déjà en watts",
           "subtract_entities": "Entités dont la consommation sera soustraite de ce consommateur (pour éviter le double comptage)"
         }
       }
