@@ -2,89 +2,71 @@
   "config": {
     "step": {
       "user": {
-        "title": "APER HEMS — Installation",
-        "description": "What kind of installation do you have?",
-        "data": {
-          "profile": "Installation type"
-        }
-      },
-      "equipment": {
-        "title": "APER HEMS — Equipment",
-        "description": "Select the equipment you use. The integration will look for the right sensors automatically.",
-        "data": {
-          "brands": "Installed equipment"
-        }
-      },
-      "entities": {
-        "title": "APER HEMS — Detected sensors",
-        "description": "Check the sensors detected automatically. You can change them if needed.",
-        "data": {
-          "grid_entity": "Grid sensor",
-          "production_entity": "Solar production sensor",
-          "consumption_entity": "Consumption sensor",
-          "add_battery_entity": "Battery charge sensor",
-          "out_battery_entity": "Battery discharge sensor",
-          "soc_entity": "Battery level (%)"
-        },
-        "data_description": {
-          "grid_entity": "Grid power — positive = import, negative = export (e.g. sensor.whatwatt_go_power_in)",
-          "production_entity": "Power produced by your panels (e.g. sensor.fronius_power)",
-          "consumption_entity": "Total power used by the house (optional, computed if missing)",
-          "add_battery_entity": "Battery charging power (optional)",
-          "out_battery_entity": "Battery discharging power (optional)",
-          "soc_entity": "Battery state of charge in % (optional)"
-        }
-      },
-      "api": {
-        "title": "APER HEMS — Connection",
-        "description": "Enter the API key provided by APER (created from the aper-association.ch administration).",
+        "title": "APER HEMS",
+        "description": "Set up the sending of your solar data to the APER HEMS Cockpit.\n\nPower sensors (W) give the 15-minute curves. Energy meters (kWh), optional, make them more accurate.",
         "data": {
           "api_key": "API key",
-          "update_interval": "Sending interval"
+          "production_entity": "Solar production (W)",
+          "grid_entity": "Grid (W)",
+          "grid_import_positive": "Positive = grid import",
+          "battery_entity": "Battery (W)",
+          "battery_soc_entity": "Battery — state of charge (%)",
+          "meter_production": "Meter — Production (kWh)",
+          "meter_import": "Meter — Grid import (kWh)",
+          "meter_export": "Meter — Grid export (kWh)",
+          "meter_battery_charge": "Meter — Battery charge (kWh)",
+          "meter_battery_discharge": "Meter — Battery discharge (kWh)",
+          "battery_charge_positive": "Battery meters the right way round",
+          "update_interval": "Update interval"
         },
         "data_description": {
-          "api_key": "Your personal API key",
+          "api_key": "Your personal API key, provided by APER",
+          "production_entity": "Instantaneous PV power in watts",
+          "grid_entity": "Instantaneous grid power — positive = import, negative = export",
+          "grid_import_positive": "Uncheck if your sensor is inverted (positive = export instead of import)",
+          "battery_entity": "Instantaneous battery power — positive = charge, negative = discharge",
+          "battery_soc_entity": "Battery state of charge (0–100 %)",
+          "meter_production": "Cumulative kWh meter — more accurate than power for historical curves",
+          "meter_import": "Cumulative meter of energy imported from the grid",
+          "meter_export": "Cumulative meter of energy exported to the grid",
+          "meter_battery_charge": "Cumulative meter of energy stored in the battery",
+          "meter_battery_discharge": "Cumulative meter of energy delivered by the battery",
+          "battery_charge_positive": "Uncheck if your battery charge and discharge meters are swapped",
           "update_interval": "Data sending interval in minutes (15 min recommended)"
         }
       },
       "reconfigure": {
         "title": "Reconfigure APER HEMS",
-        "description": "Change the settings of your integration. Advanced fields (meters, polarity) are optional.",
+        "description": "Power sensors (W) give the 15-minute curves. Energy meters (kWh) are optional but give more accurate historical curves.",
         "data": {
-          "grid_entity": "Grid sensor",
-          "grid_import_positive": "Grid import = positive value",
-          "production_entity": "Solar production sensor",
-          "consumption_entity": "Consumption sensor",
-          "battery_entity": "Battery (single signed entity)",
-          "add_battery_entity": "Battery charge sensor",
-          "out_battery_entity": "Battery discharge sensor",
-          "soc_entity": "Battery level (%)",
-          "battery_charge_positive": "Battery charge = positive value",
-          "meter_production": "Production energy meter (kWh)",
-          "meter_import": "Import energy meter (kWh)",
-          "meter_export": "Export energy meter (kWh)",
-          "meter_battery_charge": "Battery charge energy meter (kWh)",
-          "meter_battery_discharge": "Battery discharge energy meter (kWh)",
-          "update_interval": "Sending interval",
-          "api_key": "API key"
+          "api_key": "API key",
+          "production_entity": "Solar production (W)",
+          "grid_entity": "Grid (W)",
+          "grid_import_positive": "Positive = grid import",
+          "battery_entity": "Battery (W)",
+          "battery_soc_entity": "Battery — state of charge (%)",
+          "meter_production": "Meter — Production (kWh)",
+          "meter_import": "Meter — Grid import (kWh)",
+          "meter_export": "Meter — Grid export (kWh)",
+          "meter_battery_charge": "Meter — Battery charge (kWh)",
+          "meter_battery_discharge": "Meter — Battery discharge (kWh)",
+          "battery_charge_positive": "Battery meters the right way round",
+          "update_interval": "Update interval"
         },
         "data_description": {
-          "grid_entity": "Grid power — positive = import, negative = export",
-          "grid_import_positive": "Uncheck if your grid sensor is inverted (positive = export)",
-          "production_entity": "Power produced by your panels",
-          "consumption_entity": "Total power used (optional)",
-          "battery_entity": "Alternative to separate charge/discharge fields — single entity with a signed value (+ charge, - discharge)",
-          "add_battery_entity": "Battery charging power (optional)",
-          "out_battery_entity": "Battery discharging power (optional)",
-          "soc_entity": "State of charge in % (optional)",
-          "battery_charge_positive": "Uncheck if your battery sensor is inverted",
-          "meter_production": "Cumulative kWh meter — takes priority over the power sensor if set",
-          "meter_import": "Cumulative kWh grid import meter — takes priority over the grid sensor if set",
-          "meter_export": "Cumulative kWh grid export meter — takes priority over the grid sensor if set",
-          "meter_battery_charge": "Cumulative kWh battery charge meter",
-          "meter_battery_discharge": "Cumulative kWh battery discharge meter",
-          "update_interval": "Data sending interval in minutes (15 min recommended)",
-          "api_key": "Your APER API key"
+          "api_key": "Your personal API key, provided by APER",
+          "production_entity": "Instantaneous PV power in watts",
+          "grid_entity": "Instantaneous grid power — positive = import, negative = export",
+          "grid_import_positive": "Uncheck if your sensor is inverted (positive = export instead of import)",
+          "battery_entity": "Instantaneous battery power — positive = charge, negative = discharge",
+          "battery_soc_entity": "Battery state of charge (0–100 %)",
+          "meter_production": "Cumulative kWh meter — more accurate than power for historical curves",
+          "meter_import": "Cumulative meter of energy imported from the grid",
+          "meter_export": "Cumulative meter of energy exported to the grid",
+          "meter_battery_charge": "Cumulative meter of energy stored in the battery",
+          "meter_battery_discharge": "Cumulative meter of energy delivered by the battery",
+          "battery_charge_positive": "Uncheck if your battery charge and discharge meters are swapped",
+          "update_interval": "Data sending interval in minutes (15 min recommended)"
         }
       }
     },
@@ -111,12 +93,29 @@
         "data": {
           "consumer_entity": "Entity",
           "consumer_name": "Display name",
-          "consumer_category": "Category"
+          "consumer_category": "Category",
+          "subtract_entities": "Entities to subtract"
         },
         "data_description": {
           "consumer_entity": "Power sensor or energy meter of the consumer (e.g. EV charger, heat pump, pool…)",
-          "consumer_name": "Name shown in the cockpit (100 characters at most)",
-          "consumer_category": "Kind of consumer, for grouping"
+          "consumer_name": "Name shown in the cockpit chart (100 characters at most)",
+          "consumer_category": "Kind of appliance, for grouping in the cockpit",
+          "subtract_entities": "Entities whose consumption is subtracted from this consumer (to avoid counting it twice)"
+        }
+      },
+      "edit_consumer": {
+        "title": "Edit a consumer",
+        "data": {
+          "consumer_entity": "Entity",
+          "consumer_name": "Display name",
+          "consumer_category": "Category",
+          "subtract_entities": "Entities to subtract"
+        },
+        "data_description": {
+          "consumer_entity": "Power sensor or energy meter of the consumer (e.g. EV charger, heat pump, pool…)",
+          "consumer_name": "Name shown in the cockpit chart (100 characters at most)",
+          "consumer_category": "Kind of appliance, for grouping in the cockpit",
+          "subtract_entities": "Entities whose consumption is subtracted from this consumer (to avoid counting it twice)"
         }
       }
     }

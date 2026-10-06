@@ -1,7 +1,8 @@
 """APER HEMS: sends the member's measurements to aper-association.ch, per quarter of an hour.
 
-The server stores them in the "Datas" table (production, grid, battery, consumption)
-and in the "CourbesCharge" table (consumers chosen in the options).
+Adapted from ha-pilote-com 1.28.0. The server stores the measurements in the "Datas" table
+(production, grid, battery) and the consumers in the "CourbesCharge" table.
+Live sending and charging station control are not part of it: the APER site does not handle them.
 """
 from __future__ import annotations
 
@@ -20,15 +21,15 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    API_URL,
     BACKFILL_DAYS,
     BACKFILL_INTERVAL_HOURS,
     BACKFILL_MAX_RETRIES,
-    CONF_ADD_BATTERY_ENTITY,
     CONF_API_KEY,
     CONF_BATTERY_CHARGE_POSITIVE,
     CONF_BATTERY_ENTITY,
+    CONF_BATTERY_SOC_ENTITY,
     CONF_CONSUMERS,
-    CONF_CONSUMPTION_ENTITY,
     CONF_GRID_ENTITY,
     CONF_GRID_IMPORT_POSITIVE,
     CONF_METER_BATTERY_CHARGE,
@@ -36,13 +37,11 @@ from .const import (
     CONF_METER_EXPORT,
     CONF_METER_IMPORT,
     CONF_METER_PRODUCTION,
-    CONF_OUT_BATTERY_ENTITY,
     CONF_PRODUCTION_ENTITY,
-    CONF_SOC_ENTITY,
+    CONF_SUBTRACT_ENTITIES,
     CONF_UPDATE_INTERVAL,
     CONSUMER_NAME_LENGTH,
     COVERAGE_API_URL,
-    DATA_API_URL,
     DOMAIN,
     SLOT_FORMAT,
 )
@@ -56,6 +55,20 @@ AperHemsConfigEntry = ConfigEntry
 
 def _bucket_start(dt: datetime) -> datetime:
     return dt.replace(minute=(dt.minute // BUCKET_MINUTES) * BUCKET_MINUTES, second=0, microsecond=0)
+
+
+def _subtract_histories(main_history: list[dict], sub_histories: list[list[dict]]) -> list[dict]:
+    """Subtract values of sub_histories from main_history, matching by timestamp."""
+    if not sub_histories:
+        return main_history
+    sub_maps = [{pt["timestamp"]: pt["value"] for pt in sh} for sh in sub_histories]
+    result = []
+    for pt in main_history:
+        val = pt["value"]
+        for sm in sub_maps:
+            val -= sm.get(pt["timestamp"], 0)
+        result.append({"timestamp": pt["timestamp"], "value": round(max(0, val), 4)})
+    return result
 
 
 def _aggregate_15min(states: list, period_start: datetime, period_end: datetime) -> list[dict]:
@@ -125,7 +138,7 @@ def _aggregate_15min(states: list, period_start: datetime, period_end: datetime)
 
 
 def _delta_15min(states: list, period_start: datetime, period_end: datetime) -> list[dict]:
-    """Energy deltas per 15-min bucket for cumulative counters (total_increasing)."""
+    """Calculate energy deltas per 15-min bucket for cumulative counters (total_increasing)."""
     samples = []
     for state in states:
         if state.state in ("unavailable", "unknown"):
@@ -169,7 +182,7 @@ def _delta_15min(states: list, period_start: datetime, period_end: datetime) -> 
 
 
 def _split_signed(history: list[dict]) -> tuple[list[dict], list[dict]]:
-    """Signed power (+ import / - export) into two positive series."""
+    """Signed power into two positive series: (positive part, negative part)."""
     positive = []
     negative = []
     for point in history:
@@ -207,6 +220,10 @@ def _consumer_name(name: str) -> str:
     return (name or "").strip()[:CONSUMER_NAME_LENGTH]
 
 
+async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
 def _detect_counter(hass, entity_id, name):
     """Detect if entity is a cumulative counter. Result is cached in hass.data."""
     cache = hass.data.setdefault(DOMAIN, {}).setdefault("counter_cache", {})
@@ -214,20 +231,20 @@ def _detect_counter(hass, entity_id, name):
     c_state = hass.states.get(entity_id)
     if not c_state:
         if cache.get(entity_id):
-            _LOGGER.warning("Consumer %s: entity unavailable, using cached counter=True", name)
-            return True, "kWh"
-        return None, ""
+            _LOGGER.debug("Consumer %s: entity unavailable, using cached counter=True", name)
+            return True, "", "", ""
+        return None, "", "", ""
 
     sc = c_state.attributes.get("state_class", "")
     dc = c_state.attributes.get("device_class", "")
-    unit = c_state.attributes.get("unit_of_measurement", "") or ""
+    unit = c_state.attributes.get("unit_of_measurement", "")
 
     if not unit and not sc and not dc:
         if cache.get(entity_id):
-            _LOGGER.warning("Consumer %s: attributes empty, using cached counter=True", name)
-            return True, "kWh"
-        _LOGGER.warning("Consumer %s: attributes not loaded, skipping", name)
-        return None, unit
+            _LOGGER.debug("Consumer %s: attributes empty, using cached counter=True", name)
+            return True, sc, dc, unit
+        _LOGGER.debug("Consumer %s: attributes not loaded, skipping", name)
+        return None, sc, dc, unit
 
     is_counter = (
         sc in ("total_increasing", "total")
@@ -237,7 +254,7 @@ def _detect_counter(hass, entity_id, name):
 
     if not is_counter and cache.get(entity_id):
         _LOGGER.warning(
-            "Consumer %s: attributes say not counter (sc=%r dc=%r unit=%r) but cache says counter, forcing delta",
+            "Consumer %s: attributes say not counter (sc=%r dc=%r unit=%r) but cache says counter — forcing delta",
             name, sc, dc, unit,
         )
         is_counter = True
@@ -245,43 +262,40 @@ def _detect_counter(hass, entity_id, name):
     if is_counter:
         cache[entity_id] = True
 
-    return is_counter, unit
-
-
-async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    await hass.config_entries.async_reload(entry.entry_id)
+    return is_counter, sc, dc, unit
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> bool:
-    data = entry.data
-    api_key = data[CONF_API_KEY]
-    grid_entity = data[CONF_GRID_ENTITY]
-    production_entity = data.get(CONF_PRODUCTION_ENTITY, "")
-    consumption_entity = data.get(CONF_CONSUMPTION_ENTITY, "")
-    battery_entity = data.get(CONF_BATTERY_ENTITY, "")
-    add_battery_entity = data.get(CONF_ADD_BATTERY_ENTITY, "")
-    out_battery_entity = data.get(CONF_OUT_BATTERY_ENTITY, "")
-    soc_entity = data.get(CONF_SOC_ENTITY, "")
-    grid_import_positive = data.get(CONF_GRID_IMPORT_POSITIVE, True)
-    battery_charge_positive = data.get(CONF_BATTERY_CHARGE_POSITIVE, True)
-    meter_production = data.get(CONF_METER_PRODUCTION, "")
-    meter_import = data.get(CONF_METER_IMPORT, "")
-    meter_export = data.get(CONF_METER_EXPORT, "")
-    meter_battery_charge = data.get(CONF_METER_BATTERY_CHARGE, "")
-    meter_battery_discharge = data.get(CONF_METER_BATTERY_DISCHARGE, "")
-    interval_td = timedelta(minutes=int(data[CONF_UPDATE_INTERVAL]))
+    production_entity = entry.data.get(CONF_PRODUCTION_ENTITY, "")
+    grid_entity = entry.data[CONF_GRID_ENTITY]
+    grid_import_positive = entry.data.get(CONF_GRID_IMPORT_POSITIVE, True)
+    battery_entity = entry.data.get(CONF_BATTERY_ENTITY, "")
+    battery_soc_entity = entry.data.get(CONF_BATTERY_SOC_ENTITY, "")
+    meter_production = entry.data.get(CONF_METER_PRODUCTION, "")
+    meter_import = entry.data.get(CONF_METER_IMPORT, "")
+    meter_export = entry.data.get(CONF_METER_EXPORT, "")
+    meter_battery_charge = entry.data.get(CONF_METER_BATTERY_CHARGE, "")
+    meter_battery_discharge = entry.data.get(CONF_METER_BATTERY_DISCHARGE, "")
+    battery_charge_positive = entry.data.get(CONF_BATTERY_CHARGE_POSITIVE, True)
+    interval_td = timedelta(minutes=int(entry.data[CONF_UPDATE_INTERVAL]))
+    api_key = entry.data[CONF_API_KEY]
 
     session = async_get_clientsession(hass)
     headers = {"Authorization": f"Bearer {api_key}"}
 
     async def _collect(start: datetime, end: datetime) -> dict:
-        """Measurements between two UTC dates, per quarter of an hour, in the format of /api/energydata."""
-        # Grid: energy counters if configured, otherwise the signed power sensor
-        import_history, export_history, grid_unit = [], [], ""
+        """Measurements between two UTC dates, per quarter of an hour, in the format of /api/energydata.
+
+        The server computes the house consumption: production + import - export + battery balance.
+        """
+        import_history = []
+        export_history = []
+        grid_unit = ""
         if meter_import and meter_export:
             import_history = await _get_history(hass, start, end, meter_import, use_delta=True)
             export_history = await _get_history(hass, start, end, meter_export, use_delta=True)
-            grid_unit = _unit(hass, meter_import, "kWh")
+            if import_history or export_history:
+                grid_unit = _unit(hass, meter_import, "kWh")
         if not import_history and not export_history:
             grid_history = await _get_history(hass, start, end, grid_entity)
             if not grid_import_positive:
@@ -290,56 +304,49 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
             import_history, export_history = _split_signed(grid_history)
             grid_unit = _unit(hass, grid_entity)
 
-        prod_history, prod_unit = [], ""
+        prod_history = []
+        prod_unit = ""
         if meter_production:
             prod_history = await _get_history(hass, start, end, meter_production, use_delta=True)
-            prod_unit = _unit(hass, meter_production, "kWh")
+            if prod_history:
+                prod_unit = _unit(hass, meter_production, "kWh")
         if not prod_history and production_entity:
             prod_history = await _get_history(hass, start, end, production_entity)
             prod_unit = _unit(hass, production_entity)
 
-        # Battery: counters, then separate charge/discharge sensors, then a single signed sensor
-        add_history, out_history, bat_unit = [], [], ""
+        add_bat_history = []
+        out_bat_history = []
+        bat_unit = ""
         if meter_battery_charge and meter_battery_discharge:
-            charge = await _get_history(hass, start, end, meter_battery_charge, use_delta=True)
-            discharge = await _get_history(hass, start, end, meter_battery_discharge, use_delta=True)
-            add_history, out_history = (charge, discharge) if battery_charge_positive else (discharge, charge)
-            bat_unit = _unit(hass, meter_battery_charge, "kWh")
-        if not add_history and not out_history:
-            if add_battery_entity:
-                add_history = await _get_history(hass, start, end, add_battery_entity)
-                bat_unit = _unit(hass, add_battery_entity)
-            if out_battery_entity:
-                out_history = await _get_history(hass, start, end, out_battery_entity)
-                bat_unit = bat_unit or _unit(hass, out_battery_entity)
-        if not add_history and not out_history and battery_entity:
+            ch_history = await _get_history(hass, start, end, meter_battery_charge, use_delta=True)
+            dis_history = await _get_history(hass, start, end, meter_battery_discharge, use_delta=True)
+            if ch_history or dis_history:
+                if battery_charge_positive:
+                    add_bat_history, out_bat_history = ch_history, dis_history
+                else:
+                    add_bat_history, out_bat_history = dis_history, ch_history
+                bat_unit = _unit(hass, meter_battery_charge, "kWh")
+        if not add_bat_history and not out_bat_history and battery_entity:
+            # Signed battery power: positive = charge, negative = discharge
             bat_history = await _get_history(hass, start, end, battery_entity)
-            if not battery_charge_positive:
-                for pt in bat_history:
-                    pt["value"] = -pt["value"]
-            add_history, out_history = _split_signed(bat_history)
+            add_bat_history, out_bat_history = _split_signed(bat_history)
             bat_unit = _unit(hass, battery_entity)
 
-        soc_history = await _get_history(hass, start, end, soc_entity) if soc_entity else []
-
-        conso_history, conso_unit = [], ""
-        if consumption_entity:
-            conso_history = await _get_history(hass, start, end, consumption_entity)
-            conso_unit = _unit(hass, consumption_entity)
+        soc_history = []
+        if battery_soc_entity:
+            soc_history = await _get_history(hass, start, end, battery_soc_entity)
 
         payload = {
             "productionUnit": prod_unit,
             "productionHistory": prod_history,
-            "consumptionUnit": conso_unit,
-            "consumptionHistory": conso_history,
             "importUnit": grid_unit,
             "importHistory": import_history,
             "exportUnit": grid_unit,
             "exportHistory": export_history,
             "addBatteryUnit": bat_unit,
-            "addBatteryHistory": add_history,
+            "addBatteryHistory": add_bat_history,
             "outBatteryUnit": bat_unit,
-            "outBatteryHistory": out_history,
+            "outBatteryHistory": out_bat_history,
             "socHistory": soc_history,
             "consumers": [],
         }
@@ -347,16 +354,34 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
         for consumer in entry.options.get(CONF_CONSUMERS, []):
             entity_id = consumer["entity"]
             name = consumer["name"]
-            is_counter, unit = _detect_counter(hass, entity_id, name)
+            is_counter, sc, dc, unit = _detect_counter(hass, entity_id, name)
             if is_counter is None:
                 continue
-            history = await _get_history(hass, start, end, entity_id, use_delta=is_counter)
-            _LOGGER.debug("Consumer %s: unit=%r counter=%s points=%d", name, unit, is_counter, len(history))
+            c_history = await _get_history(hass, start, end, entity_id, use_delta=is_counter)
+            subtract_ids = consumer.get(CONF_SUBTRACT_ENTITIES, [])
+            if subtract_ids:
+                sub_histories = []
+                for sub_eid in subtract_ids:
+                    sub_counter, _sc, _dc, _u = _detect_counter(hass, sub_eid, f"sub:{sub_eid}")
+                    if sub_counter is None:
+                        continue
+                    if sub_counter != is_counter:
+                        _LOGGER.warning(
+                            "Consumer %s: subtract entity %s has different type (counter=%s vs parent counter=%s), forcing parent mode",
+                            name, sub_eid, sub_counter, is_counter,
+                        )
+                    sub_histories.append(await _get_history(hass, start, end, sub_eid, use_delta=is_counter))
+                c_history = _subtract_histories(c_history, sub_histories)
+            _LOGGER.debug(
+                "Consumer %s: sc=%r dc=%r unit=%r counter=%s pts=%d subs=%d",
+                name, sc, dc, unit, is_counter, len(c_history), len(subtract_ids),
+            )
             payload["consumers"].append({
                 "name": name,
-                "unit": unit,
+                # A counter whose unit is not loaded yet (cache): kWh, as for the meters
+                "unit": unit or ("kWh" if is_counter else ""),
                 "category": consumer.get("category", "other"),
-                "history": history,
+                "history": c_history,
             })
 
         return payload
@@ -364,16 +389,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
     async def _post(payload: dict) -> bool:
         try:
             async with session.post(
-                DATA_API_URL, json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=60)
+                API_URL, json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=60)
             ) as resp:
                 if resp.status == 200:
                     return True
                 if resp.status == 401:
-                    _LOGGER.error("APER: clé API refusée, créez-en une nouvelle depuis l'administration du site")
+                    _LOGGER.error("APER : clé API refusée, demandez-en une nouvelle à l'APER")
                 else:
-                    _LOGGER.error("APER API error %s: %s", resp.status, await resp.text())
-        except (aiohttp.ClientError, asyncio.TimeoutError) as err:
-            _LOGGER.error("APER: envoi impossible: %s", err)
+                    _LOGGER.error("API error %s: %s", resp.status, await resp.text())
+        except asyncio.CancelledError:
+            raise
+        except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as err:
+            _LOGGER.error("Failed to send data: %s", type(err).__name__)
         return False
 
     async def _send_data(_now=None):
@@ -386,13 +413,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
         payload = await _collect(_bucket_start(now - interval_td), now)
         if await _post(payload):
             _LOGGER.debug(
-                "History sent: %d prod, %d imp, %d exp, %d consumers",
-                len(payload["productionHistory"]), len(payload["importHistory"]),
-                len(payload["exportHistory"]), len(payload["consumers"]),
+                "History sent: %d prod, %d imp, %d exp, %d bat, %d consumers",
+                len(payload["productionHistory"]),
+                len(payload["importHistory"]),
+                len(payload["exportHistory"]),
+                len(payload["addBatteryHistory"]) + len(payload["outBatteryHistory"]),
+                len(payload["consumers"]),
             )
 
     async def _backfill(_now=None):
-        """Fill the gaps of the last days from the Home Assistant recorder."""
+        """Combler les trous des derniers jours depuis le recorder HA."""
         failures = hass.data.setdefault(DOMAIN, {}).setdefault("backfill_failures", {})
 
         now = dt_util.utcnow()
@@ -410,9 +440,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
                     _LOGGER.warning("Coverage API error: %s", resp.status)
                     return
                 coverage = await resp.json()
-        except (aiohttp.ClientError, asyncio.TimeoutError) as err:
-            _LOGGER.warning("Coverage API unreachable: %s", err)
+        except asyncio.CancelledError:
+            raise
+        except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as err:
+            _LOGGER.warning("Coverage API unreachable: %s", type(err).__name__)
             return
+
+        existing = set(coverage.get("slots", []))
+        # The server compares consumer names without case
+        consumer_existing = {
+            name.lower(): set(slots) for name, slots in coverage.get("consumerSlots", {}).items()
+        }
 
         expected = set()
         bucket = start
@@ -420,56 +458,68 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
             expected.add(bucket.strftime(SLOT_FORMAT))
             bucket += timedelta(minutes=BUCKET_MINUTES)
 
-        missing = expected - set(coverage.get("slots", []))
+        missing = expected - existing
 
-        # The server compares consumer names without case
-        consumer_existing = {
-            name.lower(): set(slots) for name, slots in coverage.get("consumerSlots", {}).items()
-        }
         for consumer in entry.options.get(CONF_CONSUMERS, []):
             c_name = _consumer_name(consumer["name"])
             c_missing = expected - consumer_existing.get(c_name.lower(), set())
             if c_missing:
-                _LOGGER.info("Backfill: consumer '%s' misses %d slots", c_name, len(c_missing))
+                _LOGGER.info("Backfill: consommateur '%s' manque %d slots", c_name, len(c_missing))
             missing |= c_missing
 
-        # A quarter of an hour that the recorder cannot fill is only tried a few times
-        actionable = sorted(s for s in missing if failures.get(s, 0) < BACKFILL_MAX_RETRIES)
-        if not actionable:
-            _LOGGER.debug("Backfill: nothing to send")
+        if not missing:
+            _LOGGER.debug("Backfill: aucun trou détecté")
             return
 
-        _LOGGER.info("Backfill: %d gaps, %d to send", len(missing), len(actionable))
+        actionable = sorted(s for s in missing if failures.get(s, 0) < BACKFILL_MAX_RETRIES)
+        if not actionable:
+            _LOGGER.debug("Backfill: tous les trous ont atteint le max de tentatives")
+            return
+
+        _LOGGER.info("Backfill: %d trous, %d à traiter", len(missing), len(actionable))
 
         # Consecutive quarters of an hour grouped into ranges of 24 h at most
         ranges = []
-        for slot in actionable:
-            slot_dt = datetime.strptime(slot, SLOT_FORMAT).replace(tzinfo=dt_util.UTC)
+        for slot_str in actionable:
+            slot_dt = datetime.strptime(slot_str, SLOT_FORMAT).replace(tzinfo=dt_util.UTC)
             slot_end = slot_dt + timedelta(minutes=BUCKET_MINUTES)
             if ranges and ranges[-1][1] == slot_dt and slot_end - ranges[-1][0] <= timedelta(hours=24):
                 ranges[-1][1] = slot_end
             else:
                 ranges.append([slot_dt, slot_end])
 
+        _LOGGER.info("Backfill: %d tranches à envoyer", len(ranges))
+
         for idx, (r_start, r_end) in enumerate(ranges):
             if idx > 0:
                 await asyncio.sleep(5)
 
-            slot = r_start
-            while slot < r_end:
-                key = slot.strftime(SLOT_FORMAT)
-                failures[key] = failures.get(key, 0) + 1
-                slot += timedelta(minutes=BUCKET_MINUTES)
+            range_slots = []
+            s = r_start
+            while s < r_end:
+                range_slots.append(s.strftime(SLOT_FORMAT))
+                s += timedelta(minutes=BUCKET_MINUTES)
 
             try:
                 payload = await _collect(r_start, r_end)
-                if not payload["importHistory"] and not payload["exportHistory"]:
-                    _LOGGER.info("Backfill: no recorder data for %s -> %s", r_start, r_end)
+
+                has_main = bool(payload["importHistory"] or payload["exportHistory"])
+                has_consumers = any(c["history"] for c in payload["consumers"])
+                if not has_main and not has_consumers:
+                    for sl in range_slots:
+                        failures[sl] = failures.get(sl, 0) + 1
+                    _LOGGER.info("Backfill: pas de données recorder pour %s→%s", r_start, r_end)
                     continue
+
                 if await _post(payload):
-                    _LOGGER.info("Backfill OK: %s -> %s", r_start, r_end)
+                    _LOGGER.info("Backfill OK: %s → %s (%d points)", r_start, r_end,
+                                 len(payload["productionHistory"]))
+                else:
+                    for sl in range_slots:
+                        failures[sl] = failures.get(sl, 0) + 1
+
             except Exception as err:  # noqa: BLE001 - one bad range must not stop the others
-                _LOGGER.error("Backfill error %s -> %s: %s", r_start, r_end, err)
+                _LOGGER.error("Backfill error %s→%s: %s", r_start, r_end, err)
 
     entry.async_on_unload(async_track_time_interval(hass, _send_data, interval_td))
     entry.async_on_unload(async_track_time_interval(hass, _backfill, timedelta(hours=BACKFILL_INTERVAL_HOURS)))
@@ -486,4 +536,5 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> bool:
+    hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
     return True

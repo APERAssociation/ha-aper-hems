@@ -2,89 +2,71 @@
   "config": {
     "step": {
       "user": {
-        "title": "APER HEMS — Installation",
-        "description": "Quel type d'installation avez-vous ?",
-        "data": {
-          "profile": "Type d'installation"
-        }
-      },
-      "equipment": {
-        "title": "APER HEMS — Matériel",
-        "description": "Sélectionnez le matériel que vous utilisez. Le plugin va chercher automatiquement les bons capteurs.",
-        "data": {
-          "brands": "Matériel installé"
-        }
-      },
-      "entities": {
-        "title": "APER HEMS — Capteurs détectés",
-        "description": "Vérifiez les capteurs détectés automatiquement. Vous pouvez les modifier si nécessaire.",
-        "data": {
-          "grid_entity": "Capteur réseau (grid)",
-          "production_entity": "Capteur production solaire",
-          "consumption_entity": "Capteur consommation",
-          "add_battery_entity": "Capteur charge batterie",
-          "out_battery_entity": "Capteur décharge batterie",
-          "soc_entity": "Niveau batterie (%)"
-        },
-        "data_description": {
-          "grid_entity": "Puissance réseau — positif = import, négatif = export (ex: sensor.whatwatt_go_power_in)",
-          "production_entity": "Puissance produite par vos panneaux (ex: sensor.fronius_power)",
-          "consumption_entity": "Puissance totale consommée par la maison (optionnel, calculée si absente)",
-          "add_battery_entity": "Puissance de charge de la batterie (optionnel)",
-          "out_battery_entity": "Puissance de décharge de la batterie (optionnel)",
-          "soc_entity": "Niveau de charge de la batterie en % (optionnel)"
-        }
-      },
-      "api": {
-        "title": "APER HEMS — Connexion",
-        "description": "Entrez la clé API fournie par l'APER (créée depuis l'administration de aper-association.ch).",
+        "title": "APER HEMS",
+        "description": "Configurez l'envoi de vos données solaires vers le Cockpit APER HEMS.\n\nLes capteurs de puissance (W) donnent les courbes par quart d'heure. Les compteurs d'énergie (kWh), optionnels, améliorent leur précision.",
         "data": {
           "api_key": "Clé API",
-          "update_interval": "Fréquence d'envoi"
+          "production_entity": "Production solaire (W)",
+          "grid_entity": "Réseau (W)",
+          "grid_import_positive": "Positif = import réseau",
+          "battery_entity": "Batterie (W)",
+          "battery_soc_entity": "Batterie — état de charge (%)",
+          "meter_production": "Compteur — Production (kWh)",
+          "meter_import": "Compteur — Import réseau (kWh)",
+          "meter_export": "Compteur — Export réseau (kWh)",
+          "meter_battery_charge": "Compteur — Charge batterie (kWh)",
+          "meter_battery_discharge": "Compteur — Décharge batterie (kWh)",
+          "battery_charge_positive": "Compteurs batterie dans le bon sens",
+          "update_interval": "Intervalle de mise à jour"
         },
         "data_description": {
-          "api_key": "Votre clé API personnelle",
+          "api_key": "Votre clé API personnelle, fournie par l'APER",
+          "production_entity": "Puissance instantanée PV en watts",
+          "grid_entity": "Puissance instantanée réseau — positif = import, négatif = export",
+          "grid_import_positive": "Décochez si votre capteur est inversé (positif = export au lieu d'import)",
+          "battery_entity": "Puissance instantanée batterie — positif = charge, négatif = décharge",
+          "battery_soc_entity": "Pourcentage de charge de la batterie (0–100 %)",
+          "meter_production": "Compteur cumulé kWh — plus précis que la puissance pour les courbes historiques",
+          "meter_import": "Compteur cumulé d'énergie importée depuis le réseau",
+          "meter_export": "Compteur cumulé d'énergie exportée vers le réseau",
+          "meter_battery_charge": "Compteur cumulé d'énergie stockée dans la batterie",
+          "meter_battery_discharge": "Compteur cumulé d'énergie restituée par la batterie",
+          "battery_charge_positive": "Décochez si vos compteurs charge et décharge batterie sont inversés",
           "update_interval": "Fréquence d'envoi des données en minutes (15 min recommandé)"
         }
       },
       "reconfigure": {
         "title": "Reconfigurer APER HEMS",
-        "description": "Modifiez les paramètres de votre intégration. Les champs avancés (compteurs, polarité) sont optionnels.",
+        "description": "Les capteurs de puissance (W) donnent les courbes par quart d'heure. Les compteurs d'énergie (kWh) sont optionnels mais donnent des courbes historiques plus précises.",
         "data": {
-          "grid_entity": "Capteur réseau (grid)",
-          "grid_import_positive": "Import réseau = valeur positive",
-          "production_entity": "Capteur production solaire",
-          "consumption_entity": "Capteur consommation",
-          "battery_entity": "Batterie (entité signée unique)",
-          "add_battery_entity": "Capteur charge batterie",
-          "out_battery_entity": "Capteur décharge batterie",
-          "soc_entity": "Niveau batterie (%)",
-          "battery_charge_positive": "Charge batterie = valeur positive",
-          "meter_production": "Compteur énergie production (kWh)",
-          "meter_import": "Compteur énergie import (kWh)",
-          "meter_export": "Compteur énergie export (kWh)",
-          "meter_battery_charge": "Compteur énergie charge batterie (kWh)",
-          "meter_battery_discharge": "Compteur énergie décharge batterie (kWh)",
-          "update_interval": "Fréquence d'envoi",
-          "api_key": "Clé API"
+          "api_key": "Clé API",
+          "production_entity": "Production solaire (W)",
+          "grid_entity": "Réseau (W)",
+          "grid_import_positive": "Positif = import réseau",
+          "battery_entity": "Batterie (W)",
+          "battery_soc_entity": "Batterie — état de charge (%)",
+          "meter_production": "Compteur — Production (kWh)",
+          "meter_import": "Compteur — Import réseau (kWh)",
+          "meter_export": "Compteur — Export réseau (kWh)",
+          "meter_battery_charge": "Compteur — Charge batterie (kWh)",
+          "meter_battery_discharge": "Compteur — Décharge batterie (kWh)",
+          "battery_charge_positive": "Compteurs batterie dans le bon sens",
+          "update_interval": "Intervalle de mise à jour"
         },
         "data_description": {
-          "grid_entity": "Puissance réseau — positif = import, négatif = export",
-          "grid_import_positive": "Décocher si votre capteur réseau est inversé (positif = export)",
-          "production_entity": "Puissance produite par vos panneaux",
-          "consumption_entity": "Puissance totale consommée (optionnel)",
-          "battery_entity": "Alternative aux champs charge/décharge séparés — entité unique avec valeur signée (+ charge, - décharge)",
-          "add_battery_entity": "Puissance de charge de la batterie (optionnel)",
-          "out_battery_entity": "Puissance de décharge de la batterie (optionnel)",
-          "soc_entity": "Niveau de charge en % (optionnel)",
-          "battery_charge_positive": "Décocher si votre capteur batterie est inversé",
-          "meter_production": "Compteur cumulatif kWh — prioritaire sur le capteur puissance si renseigné",
-          "meter_import": "Compteur cumulatif kWh import réseau — prioritaire sur le capteur grid si renseigné",
-          "meter_export": "Compteur cumulatif kWh export réseau — prioritaire sur le capteur grid si renseigné",
-          "meter_battery_charge": "Compteur cumulatif kWh charge batterie",
-          "meter_battery_discharge": "Compteur cumulatif kWh décharge batterie",
-          "update_interval": "Fréquence d'envoi des données en minutes (15 min recommandé)",
-          "api_key": "Votre clé API APER"
+          "api_key": "Votre clé API personnelle, fournie par l'APER",
+          "production_entity": "Puissance instantanée PV en watts",
+          "grid_entity": "Puissance instantanée réseau — positif = import, négatif = export",
+          "grid_import_positive": "Décochez si votre capteur est inversé (positif = export au lieu d'import)",
+          "battery_entity": "Puissance instantanée batterie — positif = charge, négatif = décharge",
+          "battery_soc_entity": "Pourcentage de charge de la batterie (0–100 %)",
+          "meter_production": "Compteur cumulé kWh — plus précis que la puissance pour les courbes historiques",
+          "meter_import": "Compteur cumulé d'énergie importée depuis le réseau",
+          "meter_export": "Compteur cumulé d'énergie exportée vers le réseau",
+          "meter_battery_charge": "Compteur cumulé d'énergie stockée dans la batterie",
+          "meter_battery_discharge": "Compteur cumulé d'énergie restituée par la batterie",
+          "battery_charge_positive": "Décochez si vos compteurs charge et décharge batterie sont inversés",
+          "update_interval": "Fréquence d'envoi des données en minutes (15 min recommandé)"
         }
       }
     },
@@ -110,13 +92,30 @@
         "title": "Ajouter un consommateur",
         "data": {
           "consumer_entity": "Entité",
-          "consumer_name": "Nom affiché",
-          "consumer_category": "Catégorie"
+          "consumer_name": "Nom d'affichage",
+          "consumer_category": "Catégorie",
+          "subtract_entities": "Entités à soustraire"
         },
         "data_description": {
-          "consumer_entity": "Capteur de puissance ou compteur d'énergie du consommateur (ex: borne VE, PAC, piscine…)",
-          "consumer_name": "Nom qui apparaîtra dans le cockpit (100 caractères au plus)",
-          "consumer_category": "Type de consommateur pour le classement"
+          "consumer_entity": "Capteur de puissance ou compteur d'énergie du consommateur (ex: borne de recharge, PAC, piscine…)",
+          "consumer_name": "Nom qui apparaîtra dans le graphique du cockpit (100 caractères au plus)",
+          "consumer_category": "Type d'appareil pour le regroupement dans le cockpit",
+          "subtract_entities": "Entités dont la consommation sera soustraite de ce consommateur (pour éviter le double comptage)"
+        }
+      },
+      "edit_consumer": {
+        "title": "Modifier un consommateur",
+        "data": {
+          "consumer_entity": "Entité",
+          "consumer_name": "Nom d'affichage",
+          "consumer_category": "Catégorie",
+          "subtract_entities": "Entités à soustraire"
+        },
+        "data_description": {
+          "consumer_entity": "Capteur de puissance ou compteur d'énergie du consommateur (ex: borne de recharge, PAC, piscine…)",
+          "consumer_name": "Nom qui apparaîtra dans le graphique du cockpit (100 caractères au plus)",
+          "consumer_category": "Type d'appareil pour le regroupement dans le cockpit",
+          "subtract_entities": "Entités dont la consommation sera soustraite de ce consommateur (pour éviter le double comptage)"
         }
       }
     }

@@ -3,7 +3,8 @@
 Intégration Home Assistant des membres de l'[APER](https://aper-association.ch). Elle envoie chaque quart d'heure
 les mesures de votre installation au Cockpit APER HEMS :
 
-- production solaire, import et export réseau, charge et décharge de la batterie, niveau de batterie, consommation ;
+- production solaire, import et export réseau, charge et décharge de la batterie, niveau de batterie
+  (la consommation de la maison est calculée par le Cockpit) ;
 - les consommateurs que vous choisissez (pompe à chaleur, chauffe-eau, borne de recharge…).
 
 Les trous (Home Assistant éteint, coupure Internet) sont comblés automatiquement à partir de l'historique de
@@ -31,12 +32,15 @@ Home Assistant, puis redémarrez Home Assistant.
 ## Configuration
 
 1. **Paramètres → Appareils et services → Ajouter une intégration → APER HEMS**.
-2. Choisissez votre type d'installation et votre matériel : les capteurs sont détectés automatiquement, vérifiez-les.
-3. Collez votre clé API.
-4. Pour ajouter des consommateurs : bouton **Configurer** de l'intégration.
+2. Renseignez :
+   - **Réseau (W)** : positif = import, négatif = export (décochez « Positif = import réseau » si c'est l'inverse) ;
+   - **Production solaire (W)**, **Batterie (W)** (positif = charge) et **état de charge (%)**, si vous en avez ;
+   - les **compteurs d'énergie (kWh)**, optionnels mais plus précis que les capteurs de puissance ;
+   - votre **clé API**.
+3. Pour ajouter, modifier ou supprimer des consommateurs : bouton **Configurer** de l'intégration.
+   Les « entités à soustraire » évitent de compter deux fois un appareil déjà mesuré par un autre capteur.
 
-Les réglages avancés (compteurs d'énergie, sens des capteurs réseau et batterie) se trouvent dans
-**⋮ → Reconfigurer**. Un compteur d'énergie, quand il existe, est plus précis qu'un capteur de puissance.
+Les réglages se modifient ensuite par **⋮ → Reconfigurer**.
 
 ## Données envoyées
 
