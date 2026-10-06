@@ -337,6 +337,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
             soc_history = await _get_history(hass, start, end, battery_soc_entity)
 
         payload = {
+            # Home location, rounded to about 1 km: the server adds the weather of each quarter of an hour
+            "latitude": round(hass.config.latitude, 2),
+            "longitude": round(hass.config.longitude, 2),
             "productionUnit": prod_unit,
             "productionHistory": prod_history,
             "importUnit": grid_unit,
