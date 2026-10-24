@@ -35,6 +35,7 @@ from .const import (
     CONF_CAR_STATUS_ENTITY,
     CONF_CARS,
     CONF_CHARGER_CURRENT_ENTITY,
+    CONF_CHARGER_ENERGY_ENTITY,
     CONF_CHARGER_PLUGGED_ENTITY,
     CONF_CHARGER_POWER_ENTITY,
     CONF_CHARGER_SWITCH_ENTITY,
@@ -231,6 +232,8 @@ class AperHemsOptionsFlow(OptionsFlow):
                 base += " 🔌"
             if c.get(CONF_CHARGER_POWER_ENTITY):
                 base += " ⚡"
+            if c.get(CONF_CHARGER_ENERGY_ENTITY):
+                base += " kWh"
             return base
 
         return await self._list_step("chargers", CONF_CHARGERS, "une borne", lambda c: c[CONF_NAME], describe, user_input)
@@ -250,7 +253,7 @@ class AperHemsOptionsFlow(OptionsFlow):
             CONF_CHARGER_SWITCH_ENTITY: user_input[CONF_CHARGER_SWITCH_ENTITY],
             CONF_CHARGER_CURRENT_ENTITY: user_input[CONF_CHARGER_CURRENT_ENTITY],
         }
-        for key in (CONF_CHARGER_PLUGGED_ENTITY, CONF_CHARGER_POWER_ENTITY):
+        for key in (CONF_CHARGER_PLUGGED_ENTITY, CONF_CHARGER_POWER_ENTITY, CONF_CHARGER_ENERGY_ENTITY):
             if user_input.get(key):
                 charger[key] = user_input[key]
         return charger
@@ -270,6 +273,8 @@ class AperHemsOptionsFlow(OptionsFlow):
                          EntitySelector(EntitySelectorConfig(domain=["binary_sensor", "sensor"])))
         _optional_entity(schema, CONF_CHARGER_POWER_ENTITY, d,
                          EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")))
+        _optional_entity(schema, CONF_CHARGER_ENERGY_ENTITY, d,
+                         EntitySelector(EntitySelectorConfig(domain="sensor", device_class="energy")))
         return vol.Schema(schema)
 
     # ---------- cars ----------

@@ -145,14 +145,16 @@
           "switch_entity": "Station — on/off switch",
           "current_entity": "Station — current setpoint",
           "plugged_entity": "Station — cable plugged in",
-          "power_entity": "Station — charging power (W)"
+          "power_entity": "Station — charging power (W)",
+          "energy_entity": "Station — energy meter (kWh)"
         },
         "data_description": {
           "name": "Displayed name, for example \"Garage\"",
           "switch_entity": "Switch that starts and stops the charge",
           "current_entity": "Adjustable number giving the charging current in amperes",
           "plugged_entity": "Sensor telling that a vehicle is plugged in (optional)",
-          "power_entity": "Instant power delivered by the station (optional)"
+          "power_entity": "Instant power delivered by the station (optional)",
+          "energy_entity": "Cumulative meter of the energy delivered by the station (optional)"
         }
       },
       "edit_charger": {
@@ -162,14 +164,16 @@
           "switch_entity": "Station — on/off switch",
           "current_entity": "Station — current setpoint",
           "plugged_entity": "Station — cable plugged in",
-          "power_entity": "Station — charging power (W)"
+          "power_entity": "Station — charging power (W)",
+          "energy_entity": "Station — energy meter (kWh)"
         },
         "data_description": {
           "name": "Displayed name, for example \"Garage\"",
           "switch_entity": "Switch that starts and stops the charge",
           "current_entity": "Adjustable number giving the charging current in amperes",
           "plugged_entity": "Sensor telling that a vehicle is plugged in (optional)",
-          "power_entity": "Instant power delivered by the station (optional)"
+          "power_entity": "Instant power delivered by the station (optional)",
+          "energy_entity": "Cumulative meter of the energy delivered by the station (optional)"
         }
       },
       "cars": {

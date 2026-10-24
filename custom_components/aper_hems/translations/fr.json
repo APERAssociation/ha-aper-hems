@@ -145,14 +145,16 @@
           "switch_entity": "Borne — interrupteur marche/arrêt",
           "current_entity": "Borne — consigne d'ampérage",
           "plugged_entity": "Borne — câble branché",
-          "power_entity": "Borne — puissance de charge (W)"
+          "power_entity": "Borne — puissance de charge (W)",
+          "energy_entity": "Borne — compteur d'énergie (kWh)"
         },
         "data_description": {
           "name": "Nom affiché, par exemple « Garage »",
           "switch_entity": "Interrupteur qui démarre et arrête la charge",
           "current_entity": "Nombre réglable donnant le courant de charge en ampères",
           "plugged_entity": "Capteur indiquant qu'un véhicule est branché (facultatif)",
-          "power_entity": "Puissance instantanée délivrée par la borne (facultatif)"
+          "power_entity": "Puissance instantanée délivrée par la borne (facultatif)",
+          "energy_entity": "Compteur cumulé de l'énergie délivrée par la borne (facultatif)"
         }
       },
       "edit_charger": {
@@ -162,14 +164,16 @@
           "switch_entity": "Borne — interrupteur marche/arrêt",
           "current_entity": "Borne — consigne d'ampérage",
           "plugged_entity": "Borne — câble branché",
-          "power_entity": "Borne — puissance de charge (W)"
+          "power_entity": "Borne — puissance de charge (W)",
+          "energy_entity": "Borne — compteur d'énergie (kWh)"
         },
         "data_description": {
           "name": "Nom affiché, par exemple « Garage »",
           "switch_entity": "Interrupteur qui démarre et arrête la charge",
           "current_entity": "Nombre réglable donnant le courant de charge en ampères",
           "plugged_entity": "Capteur indiquant qu'un véhicule est branché (facultatif)",
-          "power_entity": "Puissance instantanée délivrée par la borne (facultatif)"
+          "power_entity": "Puissance instantanée délivrée par la borne (facultatif)",
+          "energy_entity": "Compteur cumulé de l'énergie délivrée par la borne (facultatif)"
         }
       },
       "cars": {
