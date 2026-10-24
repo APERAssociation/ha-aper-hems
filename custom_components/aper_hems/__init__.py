@@ -315,6 +315,9 @@ def _detect_counter(hass, entity_id, name):
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> bool:
+    # Reloading the integration (after a change of settings, or to resend data) tries every gap again: the failures
+    # counted by the backfill are forgotten, otherwise only a restart of Home Assistant would clear them
+    hass.data.setdefault(DOMAIN, {})["backfill_failures"] = {}
     production_entity = entry.data.get(CONF_PRODUCTION_ENTITY, "")
     grid_entity = entry.data[CONF_GRID_ENTITY]
     grid_import_positive = entry.data.get(CONF_GRID_IMPORT_POSITIVE, True)

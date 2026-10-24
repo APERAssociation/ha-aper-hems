@@ -29,6 +29,16 @@ from .const import (
     CONF_BATTERY_CHARGE_POSITIVE,
     CONF_BATTERY_ENTITY,
     CONF_BATTERY_SOC_ENTITY,
+    CONF_CAR_BRAND,
+    CONF_CAR_CAPACITY,
+    CONF_CAR_SOC_ENTITY,
+    CONF_CAR_STATUS_ENTITY,
+    CONF_CARS,
+    CONF_CHARGER_CURRENT_ENTITY,
+    CONF_CHARGER_PLUGGED_ENTITY,
+    CONF_CHARGER_POWER_ENTITY,
+    CONF_CHARGER_SWITCH_ENTITY,
+    CONF_CHARGERS,
     CONF_CONSUMER_POWER_ENTITY,
     CONF_CONSUMERS,
     CONF_GRID_ENTITY,
@@ -38,6 +48,7 @@ from .const import (
     CONF_METER_EXPORT,
     CONF_METER_IMPORT,
     CONF_METER_PRODUCTION,
+    CONF_NAME,
     CONF_PRODUCTION_ENTITY,
     CONF_SUBTRACT_ENTITIES,
     CONF_UPDATE_INTERVAL,
@@ -111,51 +122,57 @@ def _user_schema(defaults: dict | None = None) -> vol.Schema:
 
 
 class AperHemsOptionsFlow(OptionsFlow):
-    """Consumers sent to the "CourbesCharge" table."""
+    """Three lists: the consumers sent to the "CourbesCharge" table, the charging stations and the cars (kept for the
+    piloting to come)."""
 
     def __init__(self):
         self._edit_index: int | None = None
 
+    def _items(self, key: str) -> list:
+        return list(self.config_entry.options.get(key, []))
+
+    def _save(self, key: str, items: list):
+        # The other lists are kept: the options are replaced as a whole
+        return self.async_create_entry(data={**self.config_entry.options, key: items})
+
     async def async_step_init(self, user_input=None):
-        consumers = list(self.config_entry.options.get(CONF_CONSUMERS, []))
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=["consumers", "chargers", "cars"],
+            description_placeholders={
+                "consumers": str(len(self._items(CONF_CONSUMERS))),
+                "chargers": str(len(self._items(CONF_CHARGERS))),
+                "cars": str(len(self._items(CONF_CARS))),
+            },
+        )
+
+    async def _list_step(self, step_id: str, key: str, noun: str, label, describe, user_input):
+        """A list with add, edit and remove: the action chosen leads to add_<step> or edit_<step>."""
+        items = self._items(key)
         if user_input is not None:
             action = user_input.get("action")
             if action == "add":
-                return await self.async_step_add_consumer()
+                return await getattr(self, f"async_step_add_{step_id[:-1]}")()
             if action and action.startswith("edit:"):
                 idx = int(action.split(":")[1])
-                if 0 <= idx < len(consumers):
+                if 0 <= idx < len(items):
                     self._edit_index = idx
-                    return await self.async_step_edit_consumer()
+                    return await getattr(self, f"async_step_edit_{step_id[:-1]}")()
             if action and action.startswith("remove:"):
                 idx = int(action.split(":")[1])
-                if 0 <= idx < len(consumers):
-                    consumers.pop(idx)
-            return self.async_create_entry(data={CONF_CONSUMERS: consumers})
+                if 0 <= idx < len(items):
+                    items.pop(idx)
+            return self._save(key, items)
 
-        options = [SelectOptionDict(value="add", label="Ajouter un consommateur")]
-        for i, c in enumerate(consumers):
-            options.append(SelectOptionDict(value=f"edit:{i}", label=f"Modifier : {c['name']}"))
-            options.append(SelectOptionDict(value=f"remove:{i}", label=f"Supprimer : {c['name']}"))
+        options = [SelectOptionDict(value="add", label=f"Ajouter {noun}")]
+        for i, item in enumerate(items):
+            options.append(SelectOptionDict(value=f"edit:{i}", label=f"Modifier : {label(item)}"))
+            options.append(SelectOptionDict(value=f"remove:{i}", label=f"Supprimer : {label(item)}"))
         options.append(SelectOptionDict(value="done", label="Terminé"))
 
-        cat_labels = {"ev_charger": "Borne de recharge", "heat_pump": "PAC", "pool": "Piscine", "hot_water": "Chauffe-eau",
-                      "appliance": "Électroménager", "other": "Autres"}
-        desc = "Aucun consommateur configuré."
-        if consumers:
-            def _fmt(c):
-                base = f"• {c['name']} [{cat_labels.get(c.get('category', 'other'), 'Autres')}] ({c['entity']})"
-                if c.get(CONF_CONSUMER_POWER_ENTITY):
-                    base += " ⚡ live"
-                subs = c.get(CONF_SUBTRACT_ENTITIES, [])
-                if subs:
-                    base += f" − {len(subs)} entité(s)"
-                return base
-            desc = "Consommateurs actuels :\n" + "\n".join(_fmt(c) for c in consumers)
-
         return self.async_show_form(
-            step_id="init",
-            description_placeholders={"consumers_list": desc},
+            step_id=step_id,
+            description_placeholders={"list": "\n".join(describe(item) for item in items) if items else "Rien de configuré pour l'instant."},
             data_schema=vol.Schema({
                 vol.Required("action", default="done"): SelectSelector(
                     SelectSelectorConfig(options=options, mode=SelectSelectorMode.LIST)
@@ -163,26 +180,154 @@ class AperHemsOptionsFlow(OptionsFlow):
             }),
         )
 
-    async def async_step_add_consumer(self, user_input=None):
-        if user_input is not None:
-            consumers = list(self.config_entry.options.get(CONF_CONSUMERS, []))
-            consumers.append(self._consumer_from_input(user_input))
-            return self.async_create_entry(data={CONF_CONSUMERS: consumers})
+    async def _edit_step(self, step_id: str, key: str, schema, from_input, user_input, adding: bool):
+        items = self._items(key)
+        if adding:
+            if user_input is not None:
+                items.append(from_input(user_input))
+                return self._save(key, items)
+            return self.async_show_form(step_id=step_id, data_schema=schema())
 
-        return self.async_show_form(step_id="add_consumer", data_schema=self._consumer_schema())
+        idx = self._edit_index
+        if idx is None or idx >= len(items):
+            return await self.async_step_init()
+        if user_input is not None:
+            items[idx] = from_input(user_input)
+            self._edit_index = None
+            return self._save(key, items)
+        return self.async_show_form(step_id=step_id, data_schema=schema(items[idx]))
+
+    # ---------- consumers ----------
+
+    async def async_step_consumers(self, user_input=None):
+        cat_labels = {"ev_charger": "Borne de recharge", "heat_pump": "PAC", "pool": "Piscine", "hot_water": "Chauffe-eau",
+                      "appliance": "Électroménager", "other": "Autres"}
+
+        def describe(c):
+            base = f"• {c['name']} [{cat_labels.get(c.get('category', 'other'), 'Autres')}] ({c['entity']})"
+            if c.get(CONF_CONSUMER_POWER_ENTITY):
+                base += " ⚡ live"
+            subs = c.get(CONF_SUBTRACT_ENTITIES, [])
+            if subs:
+                base += f" − {len(subs)} entité(s)"
+            return base
+
+        return await self._list_step("consumers", CONF_CONSUMERS, "un consommateur", lambda c: c["name"], describe, user_input)
+
+    async def async_step_add_consumer(self, user_input=None):
+        return await self._edit_step("add_consumer", CONF_CONSUMERS, self._consumer_schema, self._consumer_from_input,
+                                     user_input, adding=True)
 
     async def async_step_edit_consumer(self, user_input=None):
-        consumers = list(self.config_entry.options.get(CONF_CONSUMERS, []))
-        idx = self._edit_index
-        if idx is None or idx >= len(consumers):
-            return await self.async_step_init()
+        return await self._edit_step("edit_consumer", CONF_CONSUMERS, self._consumer_schema, self._consumer_from_input,
+                                     user_input, adding=False)
 
-        if user_input is not None:
-            consumers[idx] = self._consumer_from_input(user_input)
-            self._edit_index = None
-            return self.async_create_entry(data={CONF_CONSUMERS: consumers})
+    # ---------- charging stations ----------
 
-        return self.async_show_form(step_id="edit_consumer", data_schema=self._consumer_schema(consumers[idx]))
+    async def async_step_chargers(self, user_input=None):
+        def describe(c):
+            base = f"• {c[CONF_NAME]} ({c[CONF_CHARGER_SWITCH_ENTITY]}, {c[CONF_CHARGER_CURRENT_ENTITY]})"
+            if c.get(CONF_CHARGER_PLUGGED_ENTITY):
+                base += " 🔌"
+            if c.get(CONF_CHARGER_POWER_ENTITY):
+                base += " ⚡"
+            return base
+
+        return await self._list_step("chargers", CONF_CHARGERS, "une borne", lambda c: c[CONF_NAME], describe, user_input)
+
+    async def async_step_add_charger(self, user_input=None):
+        return await self._edit_step("add_charger", CONF_CHARGERS, self._charger_schema, self._charger_from_input,
+                                     user_input, adding=True)
+
+    async def async_step_edit_charger(self, user_input=None):
+        return await self._edit_step("edit_charger", CONF_CHARGERS, self._charger_schema, self._charger_from_input,
+                                     user_input, adding=False)
+
+    @staticmethod
+    def _charger_from_input(user_input: dict) -> dict:
+        charger = {
+            CONF_NAME: user_input[CONF_NAME].strip(),
+            CONF_CHARGER_SWITCH_ENTITY: user_input[CONF_CHARGER_SWITCH_ENTITY],
+            CONF_CHARGER_CURRENT_ENTITY: user_input[CONF_CHARGER_CURRENT_ENTITY],
+        }
+        for key in (CONF_CHARGER_PLUGGED_ENTITY, CONF_CHARGER_POWER_ENTITY):
+            if user_input.get(key):
+                charger[key] = user_input[key]
+        return charger
+
+    @staticmethod
+    def _charger_schema(defaults=None):
+        d = defaults or {}
+        schema = {vol.Required(CONF_NAME, default=d.get(CONF_NAME, "")): TextSelector(TextSelectorConfig(type="text"))}
+        switch = EntitySelector(EntitySelectorConfig(domain=["switch", "input_boolean"]))
+        current = EntitySelector(EntitySelectorConfig(domain=["number", "input_number"]))
+        for key, selector in ((CONF_CHARGER_SWITCH_ENTITY, switch), (CONF_CHARGER_CURRENT_ENTITY, current)):
+            if d.get(key):
+                schema[vol.Required(key, default=d[key])] = selector
+            else:
+                schema[vol.Required(key)] = selector
+        _optional_entity(schema, CONF_CHARGER_PLUGGED_ENTITY, d,
+                         EntitySelector(EntitySelectorConfig(domain=["binary_sensor", "sensor"])))
+        _optional_entity(schema, CONF_CHARGER_POWER_ENTITY, d,
+                         EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")))
+        return vol.Schema(schema)
+
+    # ---------- cars ----------
+
+    async def async_step_cars(self, user_input=None):
+        def label(c):
+            return f"{c[CONF_NAME]} ({c[CONF_CAR_BRAND]})" if c.get(CONF_CAR_BRAND) else c[CONF_NAME]
+
+        def describe(c):
+            parts = [label(c)]
+            if c.get(CONF_CAR_CAPACITY):
+                parts.append(f"{c[CONF_CAR_CAPACITY]:g} kWh")
+            if c.get(CONF_CAR_SOC_ENTITY):
+                parts.append(f"niveau : {c[CONF_CAR_SOC_ENTITY]}")
+            if c.get(CONF_CAR_STATUS_ENTITY):
+                parts.append(f"état : {c[CONF_CAR_STATUS_ENTITY]}")
+            return "• " + ", ".join(parts)
+
+        return await self._list_step("cars", CONF_CARS, "une voiture", label, describe, user_input)
+
+    async def async_step_add_car(self, user_input=None):
+        return await self._edit_step("add_car", CONF_CARS, self._car_schema, self._car_from_input, user_input, adding=True)
+
+    async def async_step_edit_car(self, user_input=None):
+        return await self._edit_step("edit_car", CONF_CARS, self._car_schema, self._car_from_input, user_input, adding=False)
+
+    @staticmethod
+    def _car_from_input(user_input: dict) -> dict:
+        car = {CONF_NAME: user_input[CONF_NAME].strip()}
+        brand = (user_input.get(CONF_CAR_BRAND) or "").strip()
+        if brand:
+            car[CONF_CAR_BRAND] = brand
+        for key in (CONF_CAR_SOC_ENTITY, CONF_CAR_STATUS_ENTITY):
+            if user_input.get(key):
+                car[key] = user_input[key]
+        if user_input.get(CONF_CAR_CAPACITY):
+            car[CONF_CAR_CAPACITY] = float(user_input[CONF_CAR_CAPACITY])
+        return car
+
+    @staticmethod
+    def _car_schema(defaults=None):
+        d = defaults or {}
+        schema = {
+            vol.Required(CONF_NAME, default=d.get(CONF_NAME, "")): TextSelector(TextSelectorConfig(type="text")),
+            vol.Optional(CONF_CAR_BRAND, default=d.get(CONF_CAR_BRAND, "")): TextSelector(TextSelectorConfig(type="text")),
+        }
+        _optional_entity(schema, CONF_CAR_SOC_ENTITY, d, EntitySelector(EntitySelectorConfig(domain=["sensor", "number"])))
+        _optional_entity(schema, CONF_CAR_STATUS_ENTITY, d,
+                         EntitySelector(EntitySelectorConfig(domain=["sensor", "binary_sensor", "device_tracker"])))
+        capacity = NumberSelector(NumberSelectorConfig(min=1, max=250, step=0.1, mode=NumberSelectorMode.BOX,
+                                                       unit_of_measurement="kWh"))
+        if d.get(CONF_CAR_CAPACITY):
+            schema[vol.Optional(CONF_CAR_CAPACITY, default=d[CONF_CAR_CAPACITY])] = capacity
+        else:
+            schema[vol.Optional(CONF_CAR_CAPACITY)] = capacity
+        return vol.Schema(schema)
+
+    # ---------- consumer schema and conversion ----------
 
     @staticmethod
     def _consumer_from_input(user_input: dict) -> dict:

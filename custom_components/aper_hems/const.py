@@ -17,6 +17,19 @@ CONF_CONSUMERS = "consumers"
 CONF_SUBTRACT_ENTITIES = "subtract_entities"
 CONF_CONSUMER_POWER_ENTITY = "consumer_power_entity"
 
+# Charging stations and cars, kept in the options for the piloting to come
+CONF_CHARGERS = "chargers"
+CONF_CARS = "cars"
+CONF_NAME = "name"
+CONF_CHARGER_SWITCH_ENTITY = "switch_entity"
+CONF_CHARGER_CURRENT_ENTITY = "current_entity"
+CONF_CHARGER_PLUGGED_ENTITY = "plugged_entity"
+CONF_CHARGER_POWER_ENTITY = "power_entity"
+CONF_CAR_BRAND = "brand"
+CONF_CAR_SOC_ENTITY = "soc_entity"
+CONF_CAR_STATUS_ENTITY = "status_entity"
+CONF_CAR_CAPACITY = "capacity_kwh"
+
 DEFAULT_UPDATE_INTERVAL = 15
 
 # APER site: the key is sent in the "Authorization: Bearer <key>" header

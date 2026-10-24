@@ -82,8 +82,17 @@
   "options": {
     "step": {
       "init": {
+        "title": "APER HEMS",
+        "description": "Consommateurs : {consumers} · Bornes : {chargers} · Voitures : {cars}",
+        "menu_options": {
+          "consumers": "Consommateurs",
+          "chargers": "Bornes de recharge",
+          "cars": "Voitures électriques"
+        }
+      },
+      "consumers": {
         "title": "Consommateurs",
-        "description": "{consumers_list}",
+        "description": "{list}",
         "data": {
           "action": "Action"
         }
@@ -120,6 +129,88 @@
           "consumer_category": "Type d'appareil pour le regroupement dans le cockpit",
           "consumer_power_entity": "Capteur de puissance instantanée (W/kW) pour l'onglet Live du cockpit — facultatif si l'entité principale est déjà en watts",
           "subtract_entities": "Entités dont la consommation sera soustraite de ce consommateur (pour éviter le double comptage)"
+        }
+      },
+      "chargers": {
+        "title": "Bornes de recharge",
+        "description": "Les bornes que le HEMS pourra piloter.\n\n{list}",
+        "data": {
+          "action": "Action"
+        }
+      },
+      "add_charger": {
+        "title": "Ajouter une borne",
+        "data": {
+          "name": "Nom de la borne",
+          "switch_entity": "Borne — interrupteur marche/arrêt",
+          "current_entity": "Borne — consigne d'ampérage",
+          "plugged_entity": "Borne — câble branché",
+          "power_entity": "Borne — puissance de charge (W)"
+        },
+        "data_description": {
+          "name": "Nom affiché, par exemple « Garage »",
+          "switch_entity": "Interrupteur qui démarre et arrête la charge",
+          "current_entity": "Nombre réglable donnant le courant de charge en ampères",
+          "plugged_entity": "Capteur indiquant qu'un véhicule est branché (facultatif)",
+          "power_entity": "Puissance instantanée délivrée par la borne (facultatif)"
+        }
+      },
+      "edit_charger": {
+        "title": "Modifier une borne",
+        "data": {
+          "name": "Nom de la borne",
+          "switch_entity": "Borne — interrupteur marche/arrêt",
+          "current_entity": "Borne — consigne d'ampérage",
+          "plugged_entity": "Borne — câble branché",
+          "power_entity": "Borne — puissance de charge (W)"
+        },
+        "data_description": {
+          "name": "Nom affiché, par exemple « Garage »",
+          "switch_entity": "Interrupteur qui démarre et arrête la charge",
+          "current_entity": "Nombre réglable donnant le courant de charge en ampères",
+          "plugged_entity": "Capteur indiquant qu'un véhicule est branché (facultatif)",
+          "power_entity": "Puissance instantanée délivrée par la borne (facultatif)"
+        }
+      },
+      "cars": {
+        "title": "Voitures électriques",
+        "description": "{list}",
+        "data": {
+          "action": "Action"
+        }
+      },
+      "add_car": {
+        "title": "Ajouter une voiture",
+        "data": {
+          "name": "Nom de la voiture",
+          "brand": "Marque",
+          "soc_entity": "Niveau de la batterie (%)",
+          "status_entity": "État de la voiture",
+          "capacity_kwh": "Capacité de la batterie"
+        },
+        "data_description": {
+          "name": "Nom affiché, par exemple « Model 3 de Marc »",
+          "brand": "Par exemple Tesla, Renault, Volkswagen (facultatif)",
+          "soc_entity": "Capteur de l'état de charge de la voiture, de 0 à 100 % (facultatif)",
+          "status_entity": "Capteur d'état : en charge, branchée, à la maison… (facultatif)",
+          "capacity_kwh": "Capacité utile en kWh, pour estimer la durée de charge (facultatif)"
+        }
+      },
+      "edit_car": {
+        "title": "Modifier une voiture",
+        "data": {
+          "name": "Nom de la voiture",
+          "brand": "Marque",
+          "soc_entity": "Niveau de la batterie (%)",
+          "status_entity": "État de la voiture",
+          "capacity_kwh": "Capacité de la batterie"
+        },
+        "data_description": {
+          "name": "Nom affiché, par exemple « Model 3 de Marc »",
+          "brand": "Par exemple Tesla, Renault, Volkswagen (facultatif)",
+          "soc_entity": "Capteur de l'état de charge de la voiture, de 0 à 100 % (facultatif)",
+          "status_entity": "Capteur d'état : en charge, branchée, à la maison… (facultatif)",
+          "capacity_kwh": "Capacité utile en kWh, pour estimer la durée de charge (facultatif)"
         }
       }
     }

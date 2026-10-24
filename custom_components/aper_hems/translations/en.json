@@ -82,8 +82,17 @@
   "options": {
     "step": {
       "init": {
+        "title": "APER HEMS",
+        "description": "Consumers: {consumers} · Charging stations: {chargers} · Cars: {cars}",
+        "menu_options": {
+          "consumers": "Consumers",
+          "chargers": "Charging stations",
+          "cars": "Electric cars"
+        }
+      },
+      "consumers": {
         "title": "Consumers",
-        "description": "{consumers_list}",
+        "description": "{list}",
         "data": {
           "action": "Action"
         }
@@ -120,6 +129,88 @@
           "consumer_category": "Kind of appliance, for grouping in the cockpit",
           "consumer_power_entity": "Instantaneous power sensor (W/kW) for the cockpit's Live tab — optional if the main entity is already in watts",
           "subtract_entities": "Entities whose consumption is subtracted from this consumer (to avoid counting it twice)"
+        }
+      },
+      "chargers": {
+        "title": "Charging stations",
+        "description": "The charging stations the HEMS will be able to control.\n\n{list}",
+        "data": {
+          "action": "Action"
+        }
+      },
+      "add_charger": {
+        "title": "Add a charging station",
+        "data": {
+          "name": "Charging station name",
+          "switch_entity": "Station — on/off switch",
+          "current_entity": "Station — current setpoint",
+          "plugged_entity": "Station — cable plugged in",
+          "power_entity": "Station — charging power (W)"
+        },
+        "data_description": {
+          "name": "Displayed name, for example \"Garage\"",
+          "switch_entity": "Switch that starts and stops the charge",
+          "current_entity": "Adjustable number giving the charging current in amperes",
+          "plugged_entity": "Sensor telling that a vehicle is plugged in (optional)",
+          "power_entity": "Instant power delivered by the station (optional)"
+        }
+      },
+      "edit_charger": {
+        "title": "Edit a charging station",
+        "data": {
+          "name": "Charging station name",
+          "switch_entity": "Station — on/off switch",
+          "current_entity": "Station — current setpoint",
+          "plugged_entity": "Station — cable plugged in",
+          "power_entity": "Station — charging power (W)"
+        },
+        "data_description": {
+          "name": "Displayed name, for example \"Garage\"",
+          "switch_entity": "Switch that starts and stops the charge",
+          "current_entity": "Adjustable number giving the charging current in amperes",
+          "plugged_entity": "Sensor telling that a vehicle is plugged in (optional)",
+          "power_entity": "Instant power delivered by the station (optional)"
+        }
+      },
+      "cars": {
+        "title": "Electric cars",
+        "description": "{list}",
+        "data": {
+          "action": "Action"
+        }
+      },
+      "add_car": {
+        "title": "Add a car",
+        "data": {
+          "name": "Car name",
+          "brand": "Brand",
+          "soc_entity": "Battery level (%)",
+          "status_entity": "Car status",
+          "capacity_kwh": "Battery capacity"
+        },
+        "data_description": {
+          "name": "Displayed name, for example \"Marc's Model 3\"",
+          "brand": "For example Tesla, Renault, Volkswagen (optional)",
+          "soc_entity": "Sensor of the car's state of charge, from 0 to 100 % (optional)",
+          "status_entity": "Status sensor: charging, plugged in, at home… (optional)",
+          "capacity_kwh": "Usable capacity in kWh, to estimate the charging time (optional)"
+        }
+      },
+      "edit_car": {
+        "title": "Edit a car",
+        "data": {
+          "name": "Car name",
+          "brand": "Brand",
+          "soc_entity": "Battery level (%)",
+          "status_entity": "Car status",
+          "capacity_kwh": "Battery capacity"
+        },
+        "data_description": {
+          "name": "Displayed name, for example \"Marc's Model 3\"",
+          "brand": "For example Tesla, Renault, Volkswagen (optional)",
+          "soc_entity": "Sensor of the car's state of charge, from 0 to 100 % (optional)",
+          "status_entity": "Status sensor: charging, plugged in, at home… (optional)",
+          "capacity_kwh": "Usable capacity in kWh, to estimate the charging time (optional)"
         }
       }
     }
