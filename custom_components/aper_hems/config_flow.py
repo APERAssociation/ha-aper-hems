@@ -37,6 +37,9 @@ from .const import (
     CONF_CARS,
     CONF_CHARGER_CURRENT_ENTITY,
     CONF_CHARGER_ENERGY_ENTITY,
+    CONF_CHARGER_MAX_CURRENT,
+    CONF_CHARGER_MIN_CURRENT,
+    CONF_CHARGER_PHASES,
     CONF_CHARGER_PLUGGED_ENTITY,
     CONF_CHARGER_POWER_ENTITY,
     CONF_CHARGER_SWITCH_ENTITY,
@@ -55,8 +58,13 @@ from .const import (
     CONF_SUBTRACT_ENTITIES,
     CONF_UPDATE_INTERVAL,
     COVERAGE_API_URL,
+    DEFAULT_MAX_CURRENT,
+    DEFAULT_MIN_CURRENT,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
+    PHASES_MONO,
+    PHASES_SWITCHABLE,
+    PHASES_TRI,
     SLOT_FORMAT,
 )
 
@@ -182,8 +190,12 @@ class AperHemsOptionsFlow(OptionsFlow):
             }),
         )
 
-    async def _edit_step(self, step_id: str, key: str, schema, from_input, user_input, adding: bool):
+    async def _edit_step(self, step_id: str, key: str, schema, from_input, user_input, adding: bool, validate=None):
+        """validate(user_input): the errors of the form, shown again with what was entered."""
         items = self._items(key)
+        errors = validate(user_input) if validate and user_input is not None else {}
+        if errors:
+            return self.async_show_form(step_id=step_id, data_schema=schema(user_input), errors=errors)
         if adding:
             if user_input is not None:
                 items.append(from_input(user_input))
@@ -235,17 +247,26 @@ class AperHemsOptionsFlow(OptionsFlow):
                 base += " ⚡"
             if c.get(CONF_CHARGER_ENERGY_ENTITY):
                 base += " kWh"
+            if c.get(CONF_CHARGER_PHASES):
+                phases = {PHASES_SWITCHABLE: "Mono/Tri", PHASES_MONO: "Mono", PHASES_TRI: "Triphasé"}[c[CONF_CHARGER_PHASES]]
+                base += f" · {phases} {c[CONF_CHARGER_MIN_CURRENT]}–{c[CONF_CHARGER_MAX_CURRENT]} A"
             return base
 
         return await self._list_step("chargers", CONF_CHARGERS, "une borne", lambda c: c[CONF_NAME], describe, user_input)
 
     async def async_step_add_charger(self, user_input=None):
         return await self._edit_step("add_charger", CONF_CHARGERS, self._charger_schema, self._charger_from_input,
-                                     user_input, adding=True)
+                                     user_input, adding=True, validate=self._charger_errors)
 
     async def async_step_edit_charger(self, user_input=None):
         return await self._edit_step("edit_charger", CONF_CHARGERS, self._charger_schema, self._charger_from_input,
-                                     user_input, adding=False)
+                                     user_input, adding=False, validate=self._charger_errors)
+
+    @staticmethod
+    def _charger_errors(user_input: dict) -> dict:
+        if user_input[CONF_CHARGER_MIN_CURRENT] > user_input[CONF_CHARGER_MAX_CURRENT]:
+            return {CONF_CHARGER_MAX_CURRENT: "current_range"}
+        return {}
 
     @staticmethod
     def _charger_from_input(user_input: dict) -> dict:
@@ -253,6 +274,9 @@ class AperHemsOptionsFlow(OptionsFlow):
             CONF_NAME: user_input[CONF_NAME].strip(),
             CONF_CHARGER_SWITCH_ENTITY: user_input[CONF_CHARGER_SWITCH_ENTITY],
             CONF_CHARGER_CURRENT_ENTITY: user_input[CONF_CHARGER_CURRENT_ENTITY],
+            CONF_CHARGER_PHASES: user_input[CONF_CHARGER_PHASES],
+            CONF_CHARGER_MIN_CURRENT: int(user_input[CONF_CHARGER_MIN_CURRENT]),
+            CONF_CHARGER_MAX_CURRENT: int(user_input[CONF_CHARGER_MAX_CURRENT]),
         }
         for key in (CONF_CHARGER_PLUGGED_ENTITY, CONF_CHARGER_POWER_ENTITY, CONF_CHARGER_ENERGY_ENTITY):
             if user_input.get(key):
@@ -270,6 +294,16 @@ class AperHemsOptionsFlow(OptionsFlow):
                 schema[vol.Required(key, default=d[key])] = selector
             else:
                 schema[vol.Required(key)] = selector
+        # The range it can be controlled in
+        schema[vol.Required(CONF_CHARGER_PHASES, default=d.get(CONF_CHARGER_PHASES, PHASES_TRI))] = SelectSelector(
+            SelectSelectorConfig(options=[
+                SelectOptionDict(value=PHASES_SWITCHABLE, label="Mono/Tri"),
+                SelectOptionDict(value=PHASES_MONO, label="Mono"),
+                SelectOptionDict(value=PHASES_TRI, label="Triphasé"),
+            ], mode=SelectSelectorMode.DROPDOWN))
+        amperes = NumberSelector(NumberSelectorConfig(min=1, max=80, step=1, mode=NumberSelectorMode.BOX, unit_of_measurement="A"))
+        schema[vol.Required(CONF_CHARGER_MIN_CURRENT, default=d.get(CONF_CHARGER_MIN_CURRENT, DEFAULT_MIN_CURRENT))] = amperes
+        schema[vol.Required(CONF_CHARGER_MAX_CURRENT, default=d.get(CONF_CHARGER_MAX_CURRENT, DEFAULT_MAX_CURRENT))] = amperes
         _optional_entity(schema, CONF_CHARGER_PLUGGED_ENTITY, d,
                          EntitySelector(EntitySelectorConfig(domain=["binary_sensor", "sensor"])))
         _optional_entity(schema, CONF_CHARGER_POWER_ENTITY, d,

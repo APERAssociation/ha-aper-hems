@@ -39,6 +39,9 @@ from .const import (
     CONF_CARS,
     CONF_CHARGER_CURRENT_ENTITY,
     CONF_CHARGER_ENERGY_ENTITY,
+    CONF_CHARGER_MAX_CURRENT,
+    CONF_CHARGER_MIN_CURRENT,
+    CONF_CHARGER_PHASES,
     CONF_CHARGER_PLUGGED_ENTITY,
     CONF_CHARGER_POWER_ENTITY,
     CONF_CHARGER_SWITCH_ENTITY,
@@ -786,6 +789,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
                 "plugged": _read_state(charger.get(CONF_CHARGER_PLUGGED_ENTITY)),
                 "powerW": _read_power_w(charger.get(CONF_CHARGER_POWER_ENTITY)),
                 "energyKwh": _read_energy_kwh(charger.get(CONF_CHARGER_ENERGY_ENTITY)),
+                "phases": charger.get(CONF_CHARGER_PHASES),
+                "minCurrentA": charger.get(CONF_CHARGER_MIN_CURRENT),
+                "maxCurrentA": charger.get(CONF_CHARGER_MAX_CURRENT),
             })
         return {"cars": cars, "chargers": chargers}
 

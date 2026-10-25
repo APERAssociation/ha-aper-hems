@@ -26,6 +26,15 @@ CONF_CHARGER_CURRENT_ENTITY = "current_entity"
 CONF_CHARGER_PLUGGED_ENTITY = "plugged_entity"
 CONF_CHARGER_POWER_ENTITY = "power_entity"
 CONF_CHARGER_ENERGY_ENTITY = "energy_entity"
+# The range the station can be controlled in: its phases (switchable between mono and tri, mono or tri) and its current
+CONF_CHARGER_PHASES = "phases"
+CONF_CHARGER_MIN_CURRENT = "min_current"
+CONF_CHARGER_MAX_CURRENT = "max_current"
+PHASES_SWITCHABLE = "mono_tri"
+PHASES_MONO = "mono"
+PHASES_TRI = "tri"
+DEFAULT_MIN_CURRENT = 6
+DEFAULT_MAX_CURRENT = 16
 CONF_CAR_BRAND = "brand"
 CONF_CAR_SOC_ENTITY = "soc_entity"
 CONF_CAR_STATUS_ENTITY = "status_entity"
