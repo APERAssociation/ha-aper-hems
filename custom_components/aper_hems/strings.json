@@ -142,23 +142,25 @@
         "title": "Add a charging station",
         "data": {
           "name": "Charging station name",
+          "brand": "Station brand",
           "switch_entity": "Station — on/off switch",
           "current_entity": "Station — current setpoint",
           "phases": "Phases",
           "min_current": "Minimum current",
           "max_current": "Maximum current",
-          "plugged_entity": "Station — cable plugged in",
+          "plugged_entity": "Station — status",
           "power_entity": "Station — charging power (W)",
           "energy_entity": "Station — energy meter (kWh)"
         },
         "data_description": {
           "name": "Displayed name, for example \"Garage\"",
+          "brand": "To read its status with the words of the brand and, later, control it the right way (Autre: general reading)",
           "switch_entity": "Switch that starts and stops the charge",
           "current_entity": "Adjustable number giving the charging current in amperes",
           "phases": "Mono/Tri: the station switches between them; Mono: one phase; Triphasé: three phases",
           "min_current": "The lowest charging current the station accepts (usually 6 A)",
           "max_current": "The highest charging current the installation allows",
-          "plugged_entity": "Sensor telling that a vehicle is plugged in (optional)",
+          "plugged_entity": "State of the station: charging, car plugged in, ready, paused… or simply \"cable plugged in\" (optional)",
           "power_entity": "Instant power delivered by the station (optional)",
           "energy_entity": "Cumulative meter of the energy delivered by the station (optional)"
         }
@@ -167,23 +169,25 @@
         "title": "Edit a charging station",
         "data": {
           "name": "Charging station name",
+          "brand": "Station brand",
           "switch_entity": "Station — on/off switch",
           "current_entity": "Station — current setpoint",
           "phases": "Phases",
           "min_current": "Minimum current",
           "max_current": "Maximum current",
-          "plugged_entity": "Station — cable plugged in",
+          "plugged_entity": "Station — status",
           "power_entity": "Station — charging power (W)",
           "energy_entity": "Station — energy meter (kWh)"
         },
         "data_description": {
           "name": "Displayed name, for example \"Garage\"",
+          "brand": "To read its status with the words of the brand and, later, control it the right way (Autre: general reading)",
           "switch_entity": "Switch that starts and stops the charge",
           "current_entity": "Adjustable number giving the charging current in amperes",
           "phases": "Mono/Tri: the station switches between them; Mono: one phase; Triphasé: three phases",
           "min_current": "The lowest charging current the station accepts (usually 6 A)",
           "max_current": "The highest charging current the installation allows",
-          "plugged_entity": "Sensor telling that a vehicle is plugged in (optional)",
+          "plugged_entity": "State of the station: charging, car plugged in, ready, paused… or simply \"cable plugged in\" (optional)",
           "power_entity": "Instant power delivered by the station (optional)",
           "energy_entity": "Cumulative meter of the energy delivered by the station (optional)"
         }

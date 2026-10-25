@@ -142,23 +142,25 @@
         "title": "Ajouter une borne",
         "data": {
           "name": "Nom de la borne",
+          "brand": "Marque de la borne",
           "switch_entity": "Borne — interrupteur marche/arrêt",
           "current_entity": "Borne — consigne d'ampérage",
           "phases": "Phases",
           "min_current": "Courant minimal",
           "max_current": "Courant maximal",
-          "plugged_entity": "Borne — câble branché",
+          "plugged_entity": "Borne — statut",
           "power_entity": "Borne — puissance de charge (W)",
           "energy_entity": "Borne — compteur d'énergie (kWh)"
         },
         "data_description": {
           "name": "Nom affiché, par exemple « Garage »",
+          "brand": "Pour lire son statut avec les mots de la marque et, plus tard, la piloter de la bonne manière (Autre : lecture générale)",
           "switch_entity": "Interrupteur qui démarre et arrête la charge",
           "current_entity": "Nombre réglable donnant le courant de charge en ampères",
           "phases": "Mono/Tri : la borne passe de l'un à l'autre ; Mono : une phase ; Triphasé : trois phases",
           "min_current": "Le plus petit courant de charge que la borne accepte (6 A en général)",
           "max_current": "Le plus grand courant de charge permis par l'installation",
-          "plugged_entity": "Capteur indiquant qu'un véhicule est branché (facultatif)",
+          "plugged_entity": "État de la borne : en charge, voiture branchée, prête, en pause… ou simplement « câble branché » (facultatif)",
           "power_entity": "Puissance instantanée délivrée par la borne (facultatif)",
           "energy_entity": "Compteur cumulé de l'énergie délivrée par la borne (facultatif)"
         }
@@ -167,23 +169,25 @@
         "title": "Modifier une borne",
         "data": {
           "name": "Nom de la borne",
+          "brand": "Marque de la borne",
           "switch_entity": "Borne — interrupteur marche/arrêt",
           "current_entity": "Borne — consigne d'ampérage",
           "phases": "Phases",
           "min_current": "Courant minimal",
           "max_current": "Courant maximal",
-          "plugged_entity": "Borne — câble branché",
+          "plugged_entity": "Borne — statut",
           "power_entity": "Borne — puissance de charge (W)",
           "energy_entity": "Borne — compteur d'énergie (kWh)"
         },
         "data_description": {
           "name": "Nom affiché, par exemple « Garage »",
+          "brand": "Pour lire son statut avec les mots de la marque et, plus tard, la piloter de la bonne manière (Autre : lecture générale)",
           "switch_entity": "Interrupteur qui démarre et arrête la charge",
           "current_entity": "Nombre réglable donnant le courant de charge en ampères",
           "phases": "Mono/Tri : la borne passe de l'un à l'autre ; Mono : une phase ; Triphasé : trois phases",
           "min_current": "Le plus petit courant de charge que la borne accepte (6 A en général)",
           "max_current": "Le plus grand courant de charge permis par l'installation",
-          "plugged_entity": "Capteur indiquant qu'un véhicule est branché (facultatif)",
+          "plugged_entity": "État de la borne : en charge, voiture branchée, prête, en pause… ou simplement « câble branché » (facultatif)",
           "power_entity": "Puissance instantanée délivrée par la borne (facultatif)",
           "energy_entity": "Compteur cumulé de l'énergie délivrée par la borne (facultatif)"
         }

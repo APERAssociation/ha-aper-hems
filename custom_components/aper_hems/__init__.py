@@ -38,6 +38,7 @@ from .const import (
     CONF_CAR_STATUS_ENTITY,
     CONF_CARS,
     CONF_CHARGER_CURRENT_ENTITY,
+    CONF_CHARGER_BRAND,
     CONF_CHARGER_ENERGY_ENTITY,
     CONF_CHARGER_MAX_CURRENT,
     CONF_CHARGER_MIN_CURRENT,
@@ -784,6 +785,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
             switch = _read_state(charger.get(CONF_CHARGER_SWITCH_ENTITY))
             chargers.append({
                 "name": charger[CONF_NAME],
+                "brand": charger.get(CONF_CHARGER_BRAND, "other"),
                 "switchOn": None if switch is None else switch == "on",
                 "currentA": _read_number(charger.get(CONF_CHARGER_CURRENT_ENTITY)),
                 "plugged": _read_state(charger.get(CONF_CHARGER_PLUGGED_ENTITY)),

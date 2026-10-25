@@ -23,11 +23,24 @@ CONF_CARS = "cars"
 CONF_NAME = "name"
 CONF_CHARGER_SWITCH_ENTITY = "switch_entity"
 CONF_CHARGER_CURRENT_ENTITY = "current_entity"
+# The status of the station (charging, plugged in, ready…), or just "cable plugged in": the site reads its words.
+# Its key keeps its first name, so that the stations already configured keep it
 CONF_CHARGER_PLUGGED_ENTITY = "plugged_entity"
 CONF_CHARGER_POWER_ENTITY = "power_entity"
 CONF_CHARGER_ENERGY_ENTITY = "energy_entity"
 # The range the station can be controlled in: its phases (switchable between mono and tri, mono or tri) and its current
 CONF_CHARGER_PHASES = "phases"
+# Its brand: the site reads its statuses with the words of the brand, and the control will use its own way
+CONF_CHARGER_BRAND = "brand"
+CHARGER_BRANDS = {
+    "wallbox": "Wallbox",
+    "easee": "Easee",
+    "tesla": "Tesla Wall Connector",
+    "zaptec": "Zaptec",
+    "goe": "go-e Charger",
+    "keba": "KEBA",
+    "other": "Autre",
+}
 CONF_CHARGER_MIN_CURRENT = "min_current"
 CONF_CHARGER_MAX_CURRENT = "max_current"
 PHASES_SWITCHABLE = "mono_tri"

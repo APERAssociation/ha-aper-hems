@@ -36,6 +36,7 @@ from .const import (
     CONF_CAR_STATUS_ENTITY,
     CONF_CARS,
     CONF_CHARGER_CURRENT_ENTITY,
+    CONF_CHARGER_BRAND,
     CONF_CHARGER_ENERGY_ENTITY,
     CONF_CHARGER_MAX_CURRENT,
     CONF_CHARGER_MIN_CURRENT,
@@ -57,6 +58,7 @@ from .const import (
     CONF_PRODUCTION_ENTITY,
     CONF_SUBTRACT_ENTITIES,
     CONF_UPDATE_INTERVAL,
+    CHARGER_BRANDS,
     COVERAGE_API_URL,
     DEFAULT_MAX_CURRENT,
     DEFAULT_MIN_CURRENT,
@@ -240,7 +242,9 @@ class AperHemsOptionsFlow(OptionsFlow):
 
     async def async_step_chargers(self, user_input=None):
         def describe(c):
-            base = f"• {c[CONF_NAME]} ({c[CONF_CHARGER_SWITCH_ENTITY]}, {c[CONF_CHARGER_CURRENT_ENTITY]})"
+            brand = CHARGER_BRANDS.get(c.get(CONF_CHARGER_BRAND, "other"))
+            base = f"• {c[CONF_NAME]}" + (f" [{brand}]" if brand and c.get(CONF_CHARGER_BRAND, "other") != "other" else "")
+            base += f" ({c[CONF_CHARGER_SWITCH_ENTITY]}, {c[CONF_CHARGER_CURRENT_ENTITY]})"
             if c.get(CONF_CHARGER_PLUGGED_ENTITY):
                 base += " 🔌"
             if c.get(CONF_CHARGER_POWER_ENTITY):
@@ -272,6 +276,7 @@ class AperHemsOptionsFlow(OptionsFlow):
     def _charger_from_input(user_input: dict) -> dict:
         charger = {
             CONF_NAME: user_input[CONF_NAME].strip(),
+            CONF_CHARGER_BRAND: user_input.get(CONF_CHARGER_BRAND, "other"),
             CONF_CHARGER_SWITCH_ENTITY: user_input[CONF_CHARGER_SWITCH_ENTITY],
             CONF_CHARGER_CURRENT_ENTITY: user_input[CONF_CHARGER_CURRENT_ENTITY],
             CONF_CHARGER_PHASES: user_input[CONF_CHARGER_PHASES],
@@ -287,6 +292,9 @@ class AperHemsOptionsFlow(OptionsFlow):
     def _charger_schema(defaults=None):
         d = defaults or {}
         schema = {vol.Required(CONF_NAME, default=d.get(CONF_NAME, "")): TextSelector(TextSelectorConfig(type="text"))}
+        schema[vol.Required(CONF_CHARGER_BRAND, default=d.get(CONF_CHARGER_BRAND, "other"))] = SelectSelector(
+            SelectSelectorConfig(options=[SelectOptionDict(value=k, label=v) for k, v in CHARGER_BRANDS.items()],
+                                 mode=SelectSelectorMode.DROPDOWN))
         switch = EntitySelector(EntitySelectorConfig(domain=["switch", "input_boolean"]))
         current = EntitySelector(EntitySelectorConfig(domain=["number", "input_number"]))
         for key, selector in ((CONF_CHARGER_SWITCH_ENTITY, switch), (CONF_CHARGER_CURRENT_ENTITY, current)):
