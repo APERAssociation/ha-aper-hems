@@ -190,14 +190,16 @@
           "brand": "Brand",
           "soc_entity": "Battery level (%)",
           "status_entity": "Car status",
-          "capacity_kwh": "Battery capacity"
+          "capacity_kwh": "Battery capacity",
+          "charger": "Usual charging station"
         },
         "data_description": {
           "name": "Displayed name, for example \"Marc's Model 3\"",
           "brand": "For example Tesla, Renault, Volkswagen (optional)",
           "soc_entity": "Sensor of the car's state of charge, from 0 to 100 % (optional)",
           "status_entity": "Status sensor: charging, plugged in, at home… (optional)",
-          "capacity_kwh": "Usable capacity in kWh, to estimate the charging time (optional)"
+          "capacity_kwh": "Usable capacity in kWh, to estimate the charging time (optional)",
+          "charger": "The station it usually charges at, to know which car is plugged in where (optional)"
         }
       },
       "edit_car": {
@@ -207,14 +209,16 @@
           "brand": "Brand",
           "soc_entity": "Battery level (%)",
           "status_entity": "Car status",
-          "capacity_kwh": "Battery capacity"
+          "capacity_kwh": "Battery capacity",
+          "charger": "Usual charging station"
         },
         "data_description": {
           "name": "Displayed name, for example \"Marc's Model 3\"",
           "brand": "For example Tesla, Renault, Volkswagen (optional)",
           "soc_entity": "Sensor of the car's state of charge, from 0 to 100 % (optional)",
           "status_entity": "Status sensor: charging, plugged in, at home… (optional)",
-          "capacity_kwh": "Usable capacity in kWh, to estimate the charging time (optional)"
+          "capacity_kwh": "Usable capacity in kWh, to estimate the charging time (optional)",
+          "charger": "The station it usually charges at, to know which car is plugged in where (optional)"
         }
       }
     }

@@ -30,6 +30,7 @@ CONF_CAR_BRAND = "brand"
 CONF_CAR_SOC_ENTITY = "soc_entity"
 CONF_CAR_STATUS_ENTITY = "status_entity"
 CONF_CAR_CAPACITY = "capacity_kwh"
+CONF_CAR_CHARGER = "charger"
 
 DEFAULT_UPDATE_INTERVAL = 15
 
@@ -37,6 +38,11 @@ DEFAULT_UPDATE_INTERVAL = 15
 API_BASE_URL = "https://aper-association.ch"
 API_URL = f"{API_BASE_URL}/api/energydata"
 COVERAGE_API_URL = f"{API_BASE_URL}/api/energydata/coverage"
+# Cars and charging stations with the state of their entities, for the cockpit's "Véhicule électrique" page: sent at each
+# change (every 10 s at most) and every 5 minutes anyway
+DEVICES_API_URL = f"{API_BASE_URL}/api/energydata/devices"
+DEVICES_MIN_SECONDS = 10
+DEVICES_HEARTBEAT_SECONDS = 300
 # Live values for the cockpit: a WebSocket kept open to the site, which says when a cockpit is watching
 # ("watch" message). Values are then sent at each change (at most once a second) and every 10 s anyway.
 LIVE_WS_URL = "wss://aper-association.ch/api/energydata/live"

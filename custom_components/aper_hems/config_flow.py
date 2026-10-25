@@ -31,6 +31,7 @@ from .const import (
     CONF_BATTERY_SOC_ENTITY,
     CONF_CAR_BRAND,
     CONF_CAR_CAPACITY,
+    CONF_CAR_CHARGER,
     CONF_CAR_SOC_ENTITY,
     CONF_CAR_STATUS_ENTITY,
     CONF_CARS,
@@ -312,10 +313,11 @@ class AperHemsOptionsFlow(OptionsFlow):
                 car[key] = user_input[key]
         if user_input.get(CONF_CAR_CAPACITY):
             car[CONF_CAR_CAPACITY] = float(user_input[CONF_CAR_CAPACITY])
+        if user_input.get(CONF_CAR_CHARGER):
+            car[CONF_CAR_CHARGER] = user_input[CONF_CAR_CHARGER]
         return car
 
-    @staticmethod
-    def _car_schema(defaults=None):
+    def _car_schema(self, defaults=None):
         d = defaults or {}
         schema = {
             vol.Required(CONF_NAME, default=d.get(CONF_NAME, "")): TextSelector(TextSelectorConfig(type="text")),
@@ -330,6 +332,15 @@ class AperHemsOptionsFlow(OptionsFlow):
             schema[vol.Optional(CONF_CAR_CAPACITY, default=d[CONF_CAR_CAPACITY])] = capacity
         else:
             schema[vol.Optional(CONF_CAR_CAPACITY)] = capacity
+        # The station it usually charges at, to know which car is plugged in where
+        chargers = [c[CONF_NAME] for c in self._items(CONF_CHARGERS)]
+        if chargers:
+            usual = SelectSelector(SelectSelectorConfig(
+                options=[SelectOptionDict(value=name, label=name) for name in chargers], mode=SelectSelectorMode.DROPDOWN))
+            if d.get(CONF_CAR_CHARGER) in chargers:
+                schema[vol.Optional(CONF_CAR_CHARGER, default=d[CONF_CAR_CHARGER])] = usual
+            else:
+                schema[vol.Optional(CONF_CAR_CHARGER)] = usual
         return vol.Schema(schema)
 
     # ---------- consumer schema and conversion ----------

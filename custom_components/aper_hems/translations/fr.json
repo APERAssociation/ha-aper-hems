@@ -190,14 +190,16 @@
           "brand": "Marque",
           "soc_entity": "Niveau de la batterie (%)",
           "status_entity": "État de la voiture",
-          "capacity_kwh": "Capacité de la batterie"
+          "capacity_kwh": "Capacité de la batterie",
+          "charger": "Borne habituelle"
         },
         "data_description": {
           "name": "Nom affiché, par exemple « Model 3 de Marc »",
           "brand": "Par exemple Tesla, Renault, Volkswagen (facultatif)",
           "soc_entity": "Capteur de l'état de charge de la voiture, de 0 à 100 % (facultatif)",
           "status_entity": "Capteur d'état : en charge, branchée, à la maison… (facultatif)",
-          "capacity_kwh": "Capacité utile en kWh, pour estimer la durée de charge (facultatif)"
+          "capacity_kwh": "Capacité utile en kWh, pour estimer la durée de charge (facultatif)",
+          "charger": "La borne où elle se recharge d'habitude, pour savoir quelle voiture est branchée où (facultatif)"
         }
       },
       "edit_car": {
@@ -207,14 +209,16 @@
           "brand": "Marque",
           "soc_entity": "Niveau de la batterie (%)",
           "status_entity": "État de la voiture",
-          "capacity_kwh": "Capacité de la batterie"
+          "capacity_kwh": "Capacité de la batterie",
+          "charger": "Borne habituelle"
         },
         "data_description": {
           "name": "Nom affiché, par exemple « Model 3 de Marc »",
           "brand": "Par exemple Tesla, Renault, Volkswagen (facultatif)",
           "soc_entity": "Capteur de l'état de charge de la voiture, de 0 à 100 % (facultatif)",
           "status_entity": "Capteur d'état : en charge, branchée, à la maison… (facultatif)",
-          "capacity_kwh": "Capacité utile en kWh, pour estimer la durée de charge (facultatif)"
+          "capacity_kwh": "Capacité utile en kWh, pour estimer la durée de charge (facultatif)",
+          "charger": "La borne où elle se recharge d'habitude, pour savoir quelle voiture est branchée où (facultatif)"
         }
       }
     }

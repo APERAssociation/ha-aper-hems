@@ -2,7 +2,8 @@
 
 Adapted from ha-pilote-com 1.28.0. The server stores the measurements in the "Datas" table
 (production, grid, battery) and the consumers in the "CourbesCharge" table.
-Live sending and charging station control are not part of it: the APER site does not handle them.
+Live values go through a WebSocket while a cockpit is open; the cars and charging stations configured in the options are
+sent with the state of their entities. Charging station control is not part of it yet.
 """
 from __future__ import annotations
 
@@ -30,6 +31,18 @@ from .const import (
     CONF_BATTERY_CHARGE_POSITIVE,
     CONF_BATTERY_ENTITY,
     CONF_BATTERY_SOC_ENTITY,
+    CONF_CAR_BRAND,
+    CONF_CAR_CAPACITY,
+    CONF_CAR_CHARGER,
+    CONF_CAR_SOC_ENTITY,
+    CONF_CAR_STATUS_ENTITY,
+    CONF_CARS,
+    CONF_CHARGER_CURRENT_ENTITY,
+    CONF_CHARGER_ENERGY_ENTITY,
+    CONF_CHARGER_PLUGGED_ENTITY,
+    CONF_CHARGER_POWER_ENTITY,
+    CONF_CHARGER_SWITCH_ENTITY,
+    CONF_CHARGERS,
     CONF_CONSUMER_POWER_ENTITY,
     CONF_CONSUMERS,
     CONF_GRID_ENTITY,
@@ -39,11 +52,15 @@ from .const import (
     CONF_METER_EXPORT,
     CONF_METER_IMPORT,
     CONF_METER_PRODUCTION,
+    CONF_NAME,
     CONF_PRODUCTION_ENTITY,
     CONF_SUBTRACT_ENTITIES,
     CONF_UPDATE_INTERVAL,
     CONSUMER_NAME_LENGTH,
     COVERAGE_API_URL,
+    DEVICES_API_URL,
+    DEVICES_HEARTBEAT_SECONDS,
+    DEVICES_MIN_SECONDS,
     DOMAIN,
     LIVE_HEARTBEAT_SECONDS,
     LIVE_RECONNECT_MAX_SECONDS,
@@ -734,6 +751,87 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
             pass
         finally:
             live["busy"] = False
+
+    def _read_state(entity_id):
+        """Current state of an entity as Home Assistant gives it, or None if unknown."""
+        state = hass.states.get(entity_id) if entity_id else None
+        if state is None or state.state in ("unavailable", "unknown", ""):
+            return None
+        return state.state
+
+    def _read_energy_kwh(entity_id):
+        value = _read_number(entity_id)
+        if value is None:
+            return None
+        unit = (hass.states.get(entity_id).attributes.get("unit_of_measurement") or "").lower().strip()
+        return value / 1000 if unit == "wh" else value
+
+    def _devices() -> dict:
+        """The cars and charging stations of the options, with the state of their entities (read by the site)."""
+        cars = [{
+            "name": car[CONF_NAME],
+            "brand": car.get(CONF_CAR_BRAND),
+            "capacityKwh": car.get(CONF_CAR_CAPACITY),
+            "soc": _read_number(car.get(CONF_CAR_SOC_ENTITY)),
+            "status": _read_state(car.get(CONF_CAR_STATUS_ENTITY)),
+            "charger": car.get(CONF_CAR_CHARGER),
+        } for car in entry.options.get(CONF_CARS, [])]
+        chargers = []
+        for charger in entry.options.get(CONF_CHARGERS, []):
+            switch = _read_state(charger.get(CONF_CHARGER_SWITCH_ENTITY))
+            chargers.append({
+                "name": charger[CONF_NAME],
+                "switchOn": None if switch is None else switch == "on",
+                "currentA": _read_number(charger.get(CONF_CHARGER_CURRENT_ENTITY)),
+                "plugged": _read_state(charger.get(CONF_CHARGER_PLUGGED_ENTITY)),
+                "powerW": _read_power_w(charger.get(CONF_CHARGER_POWER_ENTITY)),
+                "energyKwh": _read_energy_kwh(charger.get(CONF_CHARGER_ENERGY_ENTITY)),
+            })
+        return {"cars": cars, "chargers": chargers}
+
+    devices = {"dirty": True, "busy": False, "last_sent": 0.0}
+
+    @callback
+    def _devices_changed(_event: Event) -> None:
+        devices["dirty"] = True
+
+    async def _devices_tick(_now=None):
+        if devices["busy"]:
+            return
+        now = hass.loop.time()
+        configured = entry.options.get(CONF_CARS) or entry.options.get(CONF_CHARGERS)
+        # Sent once after a start or a change of the options, even empty (the site then forgets the removed ones)
+        if not devices["dirty"] and (not configured or now - devices["last_sent"] < DEVICES_HEARTBEAT_SECONDS):
+            return
+        devices["busy"] = True
+        devices["dirty"] = False
+        devices["last_sent"] = now
+        try:
+            async with session.post(
+                DEVICES_API_URL, json=_devices(), headers=headers, timeout=aiohttp.ClientTimeout(total=20)
+            ) as resp:
+                if resp.status != 200:
+                    _LOGGER.debug("Devices: HTTP %s", resp.status)
+        except asyncio.CancelledError:
+            raise
+        except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as err:
+            # Tried again in a minute
+            devices["last_sent"] = now - DEVICES_HEARTBEAT_SECONDS + 60
+            _LOGGER.debug("Devices not sent: %s", type(err).__name__)
+        finally:
+            devices["busy"] = False
+
+    device_entities = []
+    for car in entry.options.get(CONF_CARS, []):
+        device_entities.extend(car.get(key) for key in (CONF_CAR_SOC_ENTITY, CONF_CAR_STATUS_ENTITY))
+    for charger in entry.options.get(CONF_CHARGERS, []):
+        device_entities.extend(charger.get(key) for key in (
+            CONF_CHARGER_SWITCH_ENTITY, CONF_CHARGER_CURRENT_ENTITY, CONF_CHARGER_PLUGGED_ENTITY,
+            CONF_CHARGER_POWER_ENTITY, CONF_CHARGER_ENERGY_ENTITY))
+    device_entities = sorted({eid for eid in device_entities if eid})
+    if device_entities:
+        entry.async_on_unload(async_track_state_change_event(hass, device_entities, _devices_changed))
+    entry.async_on_unload(async_track_time_interval(hass, _devices_tick, timedelta(seconds=DEVICES_MIN_SECONDS)))
 
     live_entities = [eid for eid in (grid_entity, production_entity, battery_entity, battery_soc_entity) if eid]
     for consumer in entry.options.get(CONF_CONSUMERS, []):
