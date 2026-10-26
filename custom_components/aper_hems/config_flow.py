@@ -26,6 +26,9 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_API_KEY,
+    CONF_BATTERIES,
+    CONF_BATTERY_CAPACITY,
+    CONF_BATTERY_LEVEL_ENTITY,
     CONF_FORECAST_TODAY_ENTITY,
     CONF_FORECAST_TOMORROW_ENTITY,
     CONF_SOLAR_FIELDS,
@@ -153,14 +156,54 @@ class AperHemsOptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input=None):
         return self.async_show_menu(
             step_id="init",
-            menu_options=["consumers", "chargers", "cars", "solar_fields"],
+            menu_options=["consumers", "chargers", "cars", "batteries", "solar_fields"],
             description_placeholders={
                 "consumers": str(len(self._items(CONF_CONSUMERS))),
                 "chargers": str(len(self._items(CONF_CHARGERS))),
                 "cars": str(len(self._items(CONF_CARS))),
+                "batteries": str(len(self._items(CONF_BATTERIES))),
                 "forecasts": str(len(self._items(CONF_SOLAR_FIELDS))),
             },
         )
+
+    # ---------- solar batteries ----------
+
+    async def async_step_batteries(self, user_input=None):
+        def describe(b):
+            parts = [b[CONF_NAME], f"{b[CONF_BATTERY_CAPACITY]:g} kWh"]
+            if b.get(CONF_BATTERY_LEVEL_ENTITY):
+                parts.append(f"niveau : {b[CONF_BATTERY_LEVEL_ENTITY]}")
+            return "• " + ", ".join(parts)
+
+        return await self._list_step("batteries", CONF_BATTERIES, "une batterie", lambda b: b[CONF_NAME], describe, user_input)
+
+    async def async_step_add_batterie(self, user_input=None):
+        return await self._edit_step("add_batterie", CONF_BATTERIES, self._battery_schema, self._battery_from_input,
+                                     user_input, adding=True)
+
+    async def async_step_edit_batterie(self, user_input=None):
+        return await self._edit_step("edit_batterie", CONF_BATTERIES, self._battery_schema, self._battery_from_input,
+                                     user_input, adding=False)
+
+    @staticmethod
+    def _battery_from_input(user_input: dict) -> dict:
+        battery = {CONF_NAME: user_input[CONF_NAME].strip(), CONF_BATTERY_CAPACITY: float(user_input[CONF_BATTERY_CAPACITY])}
+        if user_input.get(CONF_BATTERY_LEVEL_ENTITY):
+            battery[CONF_BATTERY_LEVEL_ENTITY] = user_input[CONF_BATTERY_LEVEL_ENTITY]
+        return battery
+
+    @staticmethod
+    def _battery_schema(defaults=None):
+        d = defaults or {}
+        capacity = NumberSelector(NumberSelectorConfig(min=0.5, max=500, step=0.1, mode=NumberSelectorMode.BOX,
+                                                       unit_of_measurement="kWh"))
+        schema = {vol.Required(CONF_NAME, default=d.get(CONF_NAME, "")): TextSelector(TextSelectorConfig(type="text"))}
+        if d.get(CONF_BATTERY_CAPACITY):
+            schema[vol.Required(CONF_BATTERY_CAPACITY, default=d[CONF_BATTERY_CAPACITY])] = capacity
+        else:
+            schema[vol.Required(CONF_BATTERY_CAPACITY)] = capacity
+        _optional_entity(schema, CONF_BATTERY_LEVEL_ENTITY, d, EntitySelector(EntitySelectorConfig(domain=["sensor", "number"])))
+        return vol.Schema(schema)
 
     # ---------- solar fields (forecast) ----------
 

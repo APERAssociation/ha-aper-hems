@@ -31,6 +31,9 @@ from .const import (
     BACKFILL_INTERVAL_HOURS,
     BACKFILL_MAX_RETRIES,
     CONF_API_KEY,
+    CONF_BATTERIES,
+    CONF_BATTERY_CAPACITY,
+    CONF_BATTERY_LEVEL_ENTITY,
     CONF_BATTERY_CHARGE_POSITIVE,
     CONF_BATTERY_ENTITY,
     CONF_BATTERY_SOC_ENTITY,
@@ -836,7 +839,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
         return value / 1000 if unit == "wh" else value
 
     def _devices() -> dict:
-        """The cars and charging stations of the options, with the state of their entities (read by the site)."""
+        """The cars, charging stations and solar batteries of the options, with the state of their entities (read by the site)."""
         cars = [{
             "name": car[CONF_NAME],
             "brand": car.get(CONF_CAR_BRAND),
@@ -860,7 +863,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
                 "minCurrentA": charger.get(CONF_CHARGER_MIN_CURRENT),
                 "maxCurrentA": charger.get(CONF_CHARGER_MAX_CURRENT),
             })
-        return {"cars": cars, "chargers": chargers}
+        batteries = [{
+            "name": battery[CONF_NAME],
+            "capacityKwh": battery.get(CONF_BATTERY_CAPACITY),
+            "soc": _read_number(battery.get(CONF_BATTERY_LEVEL_ENTITY)),
+        } for battery in entry.options.get(CONF_BATTERIES, [])]
+        return {"cars": cars, "chargers": chargers, "batteries": batteries}
 
     devices = {"dirty": True, "busy": False, "last_sent": 0.0}
 
@@ -872,7 +880,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
         if devices["busy"]:
             return
         now = hass.loop.time()
-        configured = entry.options.get(CONF_CARS) or entry.options.get(CONF_CHARGERS)
+        configured = entry.options.get(CONF_CARS) or entry.options.get(CONF_CHARGERS) or entry.options.get(CONF_BATTERIES)
         # Sent once after a start or a change of the options, even empty (the site then forgets the removed ones)
         if not devices["dirty"] and (not configured or now - devices["last_sent"] < DEVICES_HEARTBEAT_SECONDS):
             return
@@ -901,6 +909,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
         device_entities.extend(charger.get(key) for key in (
             CONF_CHARGER_SWITCH_ENTITY, CONF_CHARGER_CURRENT_ENTITY, CONF_CHARGER_PLUGGED_ENTITY,
             CONF_CHARGER_POWER_ENTITY, CONF_CHARGER_ENERGY_ENTITY))
+    device_entities.extend(battery.get(CONF_BATTERY_LEVEL_ENTITY) for battery in entry.options.get(CONF_BATTERIES, []))
     device_entities = sorted({eid for eid in device_entities if eid})
     if device_entities:
         entry.async_on_unload(async_track_state_change_event(hass, device_entities, _devices_changed))

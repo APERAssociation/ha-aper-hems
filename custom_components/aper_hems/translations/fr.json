@@ -83,12 +83,13 @@
     "step": {
       "init": {
         "title": "APER HEMS",
-        "description": "Consommateurs : {consumers} · Bornes : {chargers} · Voitures : {cars} · Champs solaires : {forecasts}",
+        "description": "Consommateurs : {consumers} · Bornes : {chargers} · Voitures : {cars} · Batteries : {batteries} · Champs solaires : {forecasts}",
         "menu_options": {
           "consumers": "Consommateurs",
           "chargers": "Bornes de recharge",
           "cars": "Voitures électriques",
-          "solar_fields": "Champs solaires (prévision)"
+          "solar_fields": "Champs solaires (prévision)",
+          "batteries": "Batteries solaires"
         }
       },
       "consumers": {
@@ -261,6 +262,37 @@
           "name": "Nom du champ",
           "today_entity": "Prévision d'aujourd'hui",
           "tomorrow_entity": "Prévision de demain"
+        }
+      },
+      "batteries": {
+        "title": "Batteries solaires",
+        "description": "{list}",
+        "data": {
+          "action": "Action"
+        }
+      },
+      "add_batterie": {
+        "title": "Ajouter une batterie",
+        "data": {
+          "name": "Nom de la batterie",
+          "capacity_kwh": "Capacité",
+          "soc_entity": "Niveau de la batterie (%)"
+        },
+        "data_description": {
+          "capacity_kwh": "Capacité utile en kWh",
+          "soc_entity": "Capteur de l'état de charge, de 0 à 100 % (facultatif)"
+        }
+      },
+      "edit_batterie": {
+        "title": "Modifier la batterie",
+        "data": {
+          "name": "Nom de la batterie",
+          "capacity_kwh": "Capacité",
+          "soc_entity": "Niveau de la batterie (%)"
+        },
+        "data_description": {
+          "capacity_kwh": "Capacité utile en kWh",
+          "soc_entity": "Capteur de l'état de charge, de 0 à 100 % (facultatif)"
         }
       }
     },

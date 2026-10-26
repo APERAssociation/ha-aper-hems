@@ -83,12 +83,13 @@
     "step": {
       "init": {
         "title": "APER HEMS",
-        "description": "Consumers: {consumers} · Charging stations: {chargers} · Cars: {cars} · Solar fields: {forecasts}",
+        "description": "Consumers: {consumers} · Charging stations: {chargers} · Cars: {cars} · Batteries: {batteries} · Solar fields: {forecasts}",
         "menu_options": {
           "consumers": "Consumers",
           "chargers": "Charging stations",
           "cars": "Electric cars",
-          "solar_fields": "Solar fields (forecast)"
+          "solar_fields": "Solar fields (forecast)",
+          "batteries": "Solar batteries"
         }
       },
       "consumers": {
@@ -261,6 +262,37 @@
           "name": "Field name",
           "today_entity": "Today's forecast",
           "tomorrow_entity": "Tomorrow's forecast"
+        }
+      },
+      "batteries": {
+        "title": "Solar batteries",
+        "description": "{list}",
+        "data": {
+          "action": "Action"
+        }
+      },
+      "add_batterie": {
+        "title": "Add a battery",
+        "data": {
+          "name": "Battery name",
+          "capacity_kwh": "Capacity",
+          "soc_entity": "Battery level (%)"
+        },
+        "data_description": {
+          "capacity_kwh": "Usable capacity in kWh",
+          "soc_entity": "State of charge sensor, from 0 to 100 % (optional)"
+        }
+      },
+      "edit_batterie": {
+        "title": "Edit the battery",
+        "data": {
+          "name": "Battery name",
+          "capacity_kwh": "Capacity",
+          "soc_entity": "Battery level (%)"
+        },
+        "data_description": {
+          "capacity_kwh": "Usable capacity in kWh",
+          "soc_entity": "State of charge sensor, from 0 to 100 % (optional)"
         }
       }
     },

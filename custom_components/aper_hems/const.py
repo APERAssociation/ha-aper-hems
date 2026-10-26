@@ -68,6 +68,12 @@ CONF_CAR_STATUS_ENTITY = "status_entity"
 CONF_CAR_CAPACITY = "capacity_kwh"
 CONF_CAR_CHARGER = "charger"
 
+# The solar batteries of the home: their name, capacity and level (%), sent to the site with the cars (the simulator starts
+# from them)
+CONF_BATTERIES = "batteries"
+CONF_BATTERY_CAPACITY = "capacity_kwh"
+CONF_BATTERY_LEVEL_ENTITY = "soc_entity"
+
 DEFAULT_UPDATE_INTERVAL = 15
 
 # APER site: the key is sent in the "Authorization: Bearer <key>" header
