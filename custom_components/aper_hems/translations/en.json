@@ -83,12 +83,12 @@
     "step": {
       "init": {
         "title": "APER HEMS",
-        "description": "Consumers: {consumers} · Charging stations: {chargers} · Cars: {cars} · Solar forecasts: {forecasts}",
+        "description": "Consumers: {consumers} · Charging stations: {chargers} · Cars: {cars} · Solar fields: {forecasts}",
         "menu_options": {
           "consumers": "Consumers",
           "chargers": "Charging stations",
           "cars": "Electric cars",
-          "solar_forecast": "Solar forecast"
+          "solar_fields": "Solar fields (forecast)"
         }
       },
       "consumers": {
@@ -238,11 +238,29 @@
           "charger": "The station it usually charges at, to know which car is plugged in where (optional)"
         }
       },
-      "solar_forecast": {
-        "title": "Solar forecast",
-        "description": "The production forecast sensors (Open-Meteo Solar Forecast or Forecast.Solar), one per roof side, for example \"Estimated energy production - today\" and \"- tomorrow\": their forecasts (watts attribute) are added up and sent with the measurements of each quarter of an hour.",
+      "solar_fields": {
+        "title": "Solar fields",
+        "description": "One field per roof side, each with its forecast sensors (Open-Meteo Solar Forecast or Forecast.Solar) for today and tomorrow. The forecasts of all the fields are added up and sent with the measurements.\n\n{list}",
         "data": {
-          "solar_forecast_entities": "Forecast sensors"
+          "action": "Action"
+        }
+      },
+      "add_solar_field": {
+        "title": "Add a solar field",
+        "description": "The \"Estimated energy production - today\" and \"- tomorrow\" sensors of this roof side (watts attribute).",
+        "data": {
+          "name": "Field name",
+          "today_entity": "Today's forecast",
+          "tomorrow_entity": "Tomorrow's forecast"
+        }
+      },
+      "edit_solar_field": {
+        "title": "Edit the solar field",
+        "description": "The \"Estimated energy production - today\" and \"- tomorrow\" sensors of this roof side (watts attribute).",
+        "data": {
+          "name": "Field name",
+          "today_entity": "Today's forecast",
+          "tomorrow_entity": "Tomorrow's forecast"
         }
       }
     },

@@ -17,8 +17,13 @@ CONF_CONSUMERS = "consumers"
 CONF_SUBTRACT_ENTITIES = "subtract_entities"
 CONF_CONSUMER_POWER_ENTITY = "consumer_power_entity"
 
-# Solar production forecast: the sensors of Open-Meteo Solar Forecast (or Forecast.Solar), one per roof side, whose "watts"
-# attribute gives the power expected at each time; they are added up and sent with the measurements of each quarter of an hour
+# Solar production forecast: the solar fields (one per roof side), each with the sensors of Open-Meteo Solar Forecast (or
+# Forecast.Solar) for today and tomorrow, whose "watts" attribute gives the power expected at each time; all of them are added
+# up and sent with the measurements of each quarter of an hour
+CONF_SOLAR_FIELDS = "solar_fields"
+CONF_FORECAST_TODAY_ENTITY = "today_entity"
+CONF_FORECAST_TOMORROW_ENTITY = "tomorrow_entity"
+# The first version: a plain list of sensors, still read
 CONF_SOLAR_FORECAST = "solar_forecast_entities"
 SOLAR_FORECAST_ATTRIBUTE = "watts"
 # How long the forecasts read are kept, for the quarters sent later (the night, the backfill of the last hours)

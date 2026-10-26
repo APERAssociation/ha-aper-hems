@@ -61,6 +61,9 @@ from .const import (
     CONF_METER_PRODUCTION,
     CONF_NAME,
     CONF_PRODUCTION_ENTITY,
+    CONF_FORECAST_TODAY_ENTITY,
+    CONF_FORECAST_TOMORROW_ENTITY,
+    CONF_SOLAR_FIELDS,
     CONF_SOLAR_FORECAST,
     CONF_SUBTRACT_ENTITIES,
     CONF_UPDATE_INTERVAL,
@@ -491,7 +494,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
         # The solar forecast: read now, and kept for the quarters sent later (the sensors only give today and tomorrow); sent
         # from the start of the period, the future included, for the planning of the next day
         forecasts = hass.data.setdefault(DOMAIN, {}).setdefault("solar_forecast", {})
-        forecasts.update(_forecast_watts(hass, entry.options.get(CONF_SOLAR_FORECAST, [])))
+        forecast_entities = [
+            field.get(key) for field in entry.options.get(CONF_SOLAR_FIELDS, [])
+            for key in (CONF_FORECAST_TODAY_ENTITY, CONF_FORECAST_TOMORROW_ENTITY) if field.get(key)
+        ] or list(entry.options.get(CONF_SOLAR_FORECAST, []))  # the first version's list, until fields are configured
+        forecasts.update(_forecast_watts(hass, forecast_entities))
         oldest = dt_util.utcnow() - timedelta(hours=SOLAR_FORECAST_KEEP_HOURS)
         for moment in [m for m in forecasts if m < oldest]:
             del forecasts[moment]

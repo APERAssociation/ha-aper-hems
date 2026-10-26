@@ -83,12 +83,12 @@
     "step": {
       "init": {
         "title": "APER HEMS",
-        "description": "Consommateurs : {consumers} · Bornes : {chargers} · Voitures : {cars} · Prévisions solaires : {forecasts}",
+        "description": "Consommateurs : {consumers} · Bornes : {chargers} · Voitures : {cars} · Champs solaires : {forecasts}",
         "menu_options": {
           "consumers": "Consommateurs",
           "chargers": "Bornes de recharge",
           "cars": "Voitures électriques",
-          "solar_forecast": "Prévision solaire"
+          "solar_fields": "Champs solaires (prévision)"
         }
       },
       "consumers": {
@@ -238,11 +238,29 @@
           "charger": "La borne où elle se recharge d'habitude, pour savoir quelle voiture est branchée où (facultatif)"
         }
       },
-      "solar_forecast": {
-        "title": "Prévision solaire",
-        "description": "Les capteurs de prévision de production (Open-Meteo Solar Forecast ou Forecast.Solar), un par pan de toit, par exemple « Production d'énergie estimée - aujourd'hui » et « - demain » : leurs prévisions (attribut watts) sont additionnées et envoyées avec les mesures de chaque quart d'heure.",
+      "solar_fields": {
+        "title": "Champs solaires",
+        "description": "Un champ par pan de toit, chacun avec ses capteurs de prévision (Open-Meteo Solar Forecast ou Forecast.Solar) d'aujourd'hui et de demain. Les prévisions de tous les champs sont additionnées et envoyées avec les mesures.\n\n{list}",
         "data": {
-          "solar_forecast_entities": "Capteurs de prévision"
+          "action": "Action"
+        }
+      },
+      "add_solar_field": {
+        "title": "Ajouter un champ solaire",
+        "description": "Les capteurs « Production d'énergie estimée - aujourd'hui » et « - demain » de ce pan de toit (attribut watts).",
+        "data": {
+          "name": "Nom du champ",
+          "today_entity": "Prévision d'aujourd'hui",
+          "tomorrow_entity": "Prévision de demain"
+        }
+      },
+      "edit_solar_field": {
+        "title": "Modifier le champ solaire",
+        "description": "Les capteurs « Production d'énergie estimée - aujourd'hui » et « - demain » de ce pan de toit (attribut watts).",
+        "data": {
+          "name": "Nom du champ",
+          "today_entity": "Prévision d'aujourd'hui",
+          "tomorrow_entity": "Prévision de demain"
         }
       }
     },

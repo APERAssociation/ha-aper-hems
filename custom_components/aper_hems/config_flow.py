@@ -26,7 +26,9 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_API_KEY,
-    CONF_SOLAR_FORECAST,
+    CONF_FORECAST_TODAY_ENTITY,
+    CONF_FORECAST_TOMORROW_ENTITY,
+    CONF_SOLAR_FIELDS,
     CONF_BATTERY_CHARGE_POSITIVE,
     CONF_BATTERY_ENTITY,
     CONF_BATTERY_SOC_ENTITY,
@@ -151,26 +153,51 @@ class AperHemsOptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input=None):
         return self.async_show_menu(
             step_id="init",
-            menu_options=["consumers", "chargers", "cars", "solar_forecast"],
+            menu_options=["consumers", "chargers", "cars", "solar_fields"],
             description_placeholders={
                 "consumers": str(len(self._items(CONF_CONSUMERS))),
                 "chargers": str(len(self._items(CONF_CHARGERS))),
                 "cars": str(len(self._items(CONF_CARS))),
-                "forecasts": str(len(self._items(CONF_SOLAR_FORECAST))),
+                "forecasts": str(len(self._items(CONF_SOLAR_FIELDS))),
             },
         )
 
-    async def async_step_solar_forecast(self, user_input=None):
-        # One forecast sensor per roof side (Open-Meteo Solar Forecast, Forecast.Solar): they are added up
-        if user_input is not None:
-            return self._save(CONF_SOLAR_FORECAST, user_input.get(CONF_SOLAR_FORECAST, []))
-        return self.async_show_form(
-            step_id="solar_forecast",
-            data_schema=vol.Schema({
-                vol.Optional(CONF_SOLAR_FORECAST, default=self._items(CONF_SOLAR_FORECAST)):
-                    EntitySelector(EntitySelectorConfig(domain="sensor", multiple=True)),
-            }),
-        )
+    # ---------- solar fields (forecast) ----------
+
+    async def async_step_solar_fields(self, user_input=None):
+        def describe(f):
+            sensors = [f[CONF_FORECAST_TODAY_ENTITY]] + ([f[CONF_FORECAST_TOMORROW_ENTITY]] if f.get(CONF_FORECAST_TOMORROW_ENTITY) else [])
+            return f"• {f[CONF_NAME]} ({', '.join(sensors)})"
+
+        return await self._list_step("solar_fields", CONF_SOLAR_FIELDS, "un champ solaire", lambda f: f[CONF_NAME], describe,
+                                     user_input)
+
+    async def async_step_add_solar_field(self, user_input=None):
+        return await self._edit_step("add_solar_field", CONF_SOLAR_FIELDS, self._solar_field_schema, self._solar_field_from_input,
+                                     user_input, adding=True)
+
+    async def async_step_edit_solar_field(self, user_input=None):
+        return await self._edit_step("edit_solar_field", CONF_SOLAR_FIELDS, self._solar_field_schema, self._solar_field_from_input,
+                                     user_input, adding=False)
+
+    @staticmethod
+    def _solar_field_from_input(user_input: dict) -> dict:
+        field = {CONF_NAME: user_input[CONF_NAME].strip(), CONF_FORECAST_TODAY_ENTITY: user_input[CONF_FORECAST_TODAY_ENTITY]}
+        if user_input.get(CONF_FORECAST_TOMORROW_ENTITY):
+            field[CONF_FORECAST_TOMORROW_ENTITY] = user_input[CONF_FORECAST_TOMORROW_ENTITY]
+        return field
+
+    @staticmethod
+    def _solar_field_schema(defaults=None):
+        d = defaults or {}
+        sensor = EntitySelector(EntitySelectorConfig(domain="sensor"))
+        schema = {vol.Required(CONF_NAME, default=d.get(CONF_NAME, "")): TextSelector(TextSelectorConfig(type="text"))}
+        if d.get(CONF_FORECAST_TODAY_ENTITY):
+            schema[vol.Required(CONF_FORECAST_TODAY_ENTITY, default=d[CONF_FORECAST_TODAY_ENTITY])] = sensor
+        else:
+            schema[vol.Required(CONF_FORECAST_TODAY_ENTITY)] = sensor
+        _optional_entity(schema, CONF_FORECAST_TOMORROW_ENTITY, d, sensor)
+        return vol.Schema(schema)
 
     async def _list_step(self, step_id: str, key: str, noun: str, label, describe, user_input):
         """A list with add, edit and remove: the action chosen leads to add_<step> or edit_<step>."""
