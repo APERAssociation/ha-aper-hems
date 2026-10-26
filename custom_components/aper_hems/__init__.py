@@ -868,6 +868,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
             "name": battery[CONF_NAME],
             "capacityKwh": battery.get(CONF_BATTERY_CAPACITY),
             "soc": _read_number(battery.get(CONF_BATTERY_LEVEL_ENTITY)),
+            "chargeKw": battery.get("charge_kw", BATTERY_DEFAULTS["charge_kw"]),
+            "dischargeKw": battery.get("discharge_kw", BATTERY_DEFAULTS["discharge_kw"]),
             "minSoc": battery.get("min_soc", BATTERY_DEFAULTS["min_soc"]),
             "maxSoc": battery.get("max_soc", BATTERY_DEFAULTS["max_soc"]),
             "efficiency": battery.get("efficiency", BATTERY_DEFAULTS["efficiency"]),

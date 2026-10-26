@@ -277,11 +277,13 @@
           "name": "Battery name",
           "capacity_kwh": "Capacity",
           "soc_entity": "Battery level (%)",
+          "charge_kw": "Highest charging power",
+          "discharge_kw": "Highest output power",
           "min_soc": "Lowest level",
           "max_soc": "Highest level",
+          "end_soc": "Level wanted at the end of the day",
           "efficiency": "Efficiency",
-          "wear_ct": "Cost of a stored kWh (wear)",
-          "end_soc": "Level wanted at the end of the day"
+          "wear_ct": "Cost of a stored kWh (wear)"
         },
         "data_description": {
           "capacity_kwh": "Usable capacity in kWh",
@@ -290,7 +292,9 @@
           "max_soc": "The HEMS does not charge it above",
           "efficiency": "What it gives back of what it takes",
           "wear_ct": "What a kWh through it costs in wear: a charge from the grid must earn more",
-          "end_soc": "At 23:59, for the next night until the prices of the next day"
+          "end_soc": "At 23:59, for the next night until the prices of the next day",
+          "charge_kw": "The highest power it charges at",
+          "discharge_kw": "The highest power it can give to the home"
         }
       },
       "edit_batterie": {
@@ -299,11 +303,13 @@
           "name": "Battery name",
           "capacity_kwh": "Capacity",
           "soc_entity": "Battery level (%)",
+          "charge_kw": "Highest charging power",
+          "discharge_kw": "Highest output power",
           "min_soc": "Lowest level",
           "max_soc": "Highest level",
+          "end_soc": "Level wanted at the end of the day",
           "efficiency": "Efficiency",
-          "wear_ct": "Cost of a stored kWh (wear)",
-          "end_soc": "Level wanted at the end of the day"
+          "wear_ct": "Cost of a stored kWh (wear)"
         },
         "data_description": {
           "capacity_kwh": "Usable capacity in kWh",
@@ -312,7 +318,9 @@
           "max_soc": "The HEMS does not charge it above",
           "efficiency": "What it gives back of what it takes",
           "wear_ct": "What a kWh through it costs in wear: a charge from the grid must earn more",
-          "end_soc": "At 23:59, for the next night until the prices of the next day"
+          "end_soc": "At 23:59, for the next night until the prices of the next day",
+          "charge_kw": "The highest power it charges at",
+          "discharge_kw": "The highest power it can give to the home"
         }
       }
     },

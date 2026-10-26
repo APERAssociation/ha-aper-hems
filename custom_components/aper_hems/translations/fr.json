@@ -277,11 +277,13 @@
           "name": "Nom de la batterie",
           "capacity_kwh": "Capacité",
           "soc_entity": "Niveau de la batterie (%)",
+          "charge_kw": "Puissance de charge maximale",
+          "discharge_kw": "Puissance de sortie maximale",
           "min_soc": "Niveau minimal",
           "max_soc": "Niveau maximal",
+          "end_soc": "Niveau souhaité en fin de journée",
           "efficiency": "Rendement",
-          "wear_ct": "Coût du kWh stocké (usure)",
-          "end_soc": "Niveau souhaité en fin de journée"
+          "wear_ct": "Coût du kWh stocké (usure)"
         },
         "data_description": {
           "capacity_kwh": "Capacité utile en kWh",
@@ -290,7 +292,9 @@
           "max_soc": "Le HEMS ne la charge pas au-dessus",
           "efficiency": "Ce qu'elle rend de ce qu'elle prend",
           "wear_ct": "Ce que coûte en usure un kWh qui passe par elle : une charge depuis le réseau doit rapporter plus",
-          "end_soc": "À 23:59, pour la nuit suivante en attendant les prix du lendemain"
+          "end_soc": "À 23:59, pour la nuit suivante en attendant les prix du lendemain",
+          "charge_kw": "La plus forte puissance à laquelle elle se charge",
+          "discharge_kw": "La plus forte puissance qu'elle peut rendre à la maison"
         }
       },
       "edit_batterie": {
@@ -299,11 +303,13 @@
           "name": "Nom de la batterie",
           "capacity_kwh": "Capacité",
           "soc_entity": "Niveau de la batterie (%)",
+          "charge_kw": "Puissance de charge maximale",
+          "discharge_kw": "Puissance de sortie maximale",
           "min_soc": "Niveau minimal",
           "max_soc": "Niveau maximal",
+          "end_soc": "Niveau souhaité en fin de journée",
           "efficiency": "Rendement",
-          "wear_ct": "Coût du kWh stocké (usure)",
-          "end_soc": "Niveau souhaité en fin de journée"
+          "wear_ct": "Coût du kWh stocké (usure)"
         },
         "data_description": {
           "capacity_kwh": "Capacité utile en kWh",
@@ -312,7 +318,9 @@
           "max_soc": "Le HEMS ne la charge pas au-dessus",
           "efficiency": "Ce qu'elle rend de ce qu'elle prend",
           "wear_ct": "Ce que coûte en usure un kWh qui passe par elle : une charge depuis le réseau doit rapporter plus",
-          "end_soc": "À 23:59, pour la nuit suivante en attendant les prix du lendemain"
+          "end_soc": "À 23:59, pour la nuit suivante en attendant les prix du lendemain",
+          "charge_kw": "La plus forte puissance à laquelle elle se charge",
+          "discharge_kw": "La plus forte puissance qu'elle peut rendre à la maison"
         }
       }
     },

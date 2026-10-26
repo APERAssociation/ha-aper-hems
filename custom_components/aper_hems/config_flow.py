@@ -34,6 +34,8 @@ from .const import (
     CONF_BATTERY_EFFICIENCY,
     CONF_BATTERY_WEAR,
     CONF_BATTERY_END_SOC,
+    CONF_BATTERY_CHARGE_KW,
+    CONF_BATTERY_DISCHARGE_KW,
     BATTERY_DEFAULTS,
     CONF_FORECAST_TODAY_ENTITY,
     CONF_FORECAST_TOMORROW_ENTITY,
@@ -177,6 +179,8 @@ class AperHemsOptionsFlow(OptionsFlow):
     async def async_step_batteries(self, user_input=None):
         def describe(b):
             parts = [b[CONF_NAME], f"{b[CONF_BATTERY_CAPACITY]:g} kWh"]
+            if b.get(CONF_BATTERY_CHARGE_KW) is not None:
+                parts.append(f"charge {b[CONF_BATTERY_CHARGE_KW]:g} kW, décharge {b[CONF_BATTERY_DISCHARGE_KW]:g} kW")
             if b.get(CONF_BATTERY_MIN_SOC) is not None:
                 parts.append(f"{b[CONF_BATTERY_MIN_SOC]:g}–{b[CONF_BATTERY_MAX_SOC]:g} %, fin de journée {b[CONF_BATTERY_END_SOC]:g} %")
             if b.get(CONF_BATTERY_LEVEL_ENTITY):
@@ -219,6 +223,9 @@ class AperHemsOptionsFlow(OptionsFlow):
         else:
             schema[vol.Required(CONF_BATTERY_CAPACITY)] = capacity
         _optional_entity(schema, CONF_BATTERY_LEVEL_ENTITY, d, EntitySelector(EntitySelectorConfig(domain=["sensor", "number"])))
+        power = NumberSelector(NumberSelectorConfig(min=0.1, max=100, step=0.1, mode=NumberSelectorMode.BOX, unit_of_measurement="kW"))
+        for key in (CONF_BATTERY_CHARGE_KW, CONF_BATTERY_DISCHARGE_KW):
+            schema[vol.Required(key, default=d.get(key, BATTERY_DEFAULTS[key]))] = power
         percent = NumberSelector(NumberSelectorConfig(min=0, max=100, step=1, mode=NumberSelectorMode.BOX, unit_of_measurement="%"))
         for key in (CONF_BATTERY_MIN_SOC, CONF_BATTERY_MAX_SOC, CONF_BATTERY_END_SOC):
             schema[vol.Required(key, default=d.get(key, BATTERY_DEFAULTS[key]))] = percent
