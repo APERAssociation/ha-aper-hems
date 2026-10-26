@@ -83,11 +83,12 @@
     "step": {
       "init": {
         "title": "APER HEMS",
-        "description": "Consumers: {consumers} · Charging stations: {chargers} · Cars: {cars}",
+        "description": "Consumers: {consumers} · Charging stations: {chargers} · Cars: {cars} · Solar forecasts: {forecasts}",
         "menu_options": {
           "consumers": "Consumers",
           "chargers": "Charging stations",
-          "cars": "Electric cars"
+          "cars": "Electric cars",
+          "solar_forecast": "Solar forecast"
         }
       },
       "consumers": {
@@ -235,6 +236,13 @@
           "status_entity": "Status sensor: charging, plugged in, at home… (optional)",
           "capacity_kwh": "Usable capacity in kWh, to estimate the charging time (optional)",
           "charger": "The station it usually charges at, to know which car is plugged in where (optional)"
+        }
+      },
+      "solar_forecast": {
+        "title": "Solar forecast",
+        "description": "The production forecast sensors (Open-Meteo Solar Forecast or Forecast.Solar), one per roof side, for example \"Estimated energy production - today\" and \"- tomorrow\": their forecasts (watts attribute) are added up and sent with the measurements of each quarter of an hour.",
+        "data": {
+          "solar_forecast_entities": "Forecast sensors"
         }
       }
     },

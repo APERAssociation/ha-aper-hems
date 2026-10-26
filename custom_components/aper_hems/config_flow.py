@@ -26,6 +26,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_API_KEY,
+    CONF_SOLAR_FORECAST,
     CONF_BATTERY_CHARGE_POSITIVE,
     CONF_BATTERY_ENTITY,
     CONF_BATTERY_SOC_ENTITY,
@@ -150,12 +151,25 @@ class AperHemsOptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input=None):
         return self.async_show_menu(
             step_id="init",
-            menu_options=["consumers", "chargers", "cars"],
+            menu_options=["consumers", "chargers", "cars", "solar_forecast"],
             description_placeholders={
                 "consumers": str(len(self._items(CONF_CONSUMERS))),
                 "chargers": str(len(self._items(CONF_CHARGERS))),
                 "cars": str(len(self._items(CONF_CARS))),
+                "forecasts": str(len(self._items(CONF_SOLAR_FORECAST))),
             },
+        )
+
+    async def async_step_solar_forecast(self, user_input=None):
+        # One forecast sensor per roof side (Open-Meteo Solar Forecast, Forecast.Solar): they are added up
+        if user_input is not None:
+            return self._save(CONF_SOLAR_FORECAST, user_input.get(CONF_SOLAR_FORECAST, []))
+        return self.async_show_form(
+            step_id="solar_forecast",
+            data_schema=vol.Schema({
+                vol.Optional(CONF_SOLAR_FORECAST, default=self._items(CONF_SOLAR_FORECAST)):
+                    EntitySelector(EntitySelectorConfig(domain="sensor", multiple=True)),
+            }),
         )
 
     async def _list_step(self, step_id: str, key: str, noun: str, label, describe, user_input):

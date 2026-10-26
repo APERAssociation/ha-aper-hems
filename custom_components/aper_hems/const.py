@@ -17,6 +17,15 @@ CONF_CONSUMERS = "consumers"
 CONF_SUBTRACT_ENTITIES = "subtract_entities"
 CONF_CONSUMER_POWER_ENTITY = "consumer_power_entity"
 
+# Solar production forecast: the sensors of Open-Meteo Solar Forecast (or Forecast.Solar), one per roof side, whose "watts"
+# attribute gives the power expected at each time; they are added up and sent with the measurements of each quarter of an hour
+CONF_SOLAR_FORECAST = "solar_forecast_entities"
+SOLAR_FORECAST_ATTRIBUTE = "watts"
+# How long the forecasts read are kept, for the quarters sent later (the night, the backfill of the last hours)
+SOLAR_FORECAST_KEEP_HOURS = 72
+# Points further apart are not interpolated
+SOLAR_FORECAST_MAX_GAP_MINUTES = 120
+
 # Charging stations and cars, kept in the options for the piloting to come
 CONF_CHARGERS = "chargers"
 CONF_CARS = "cars"

@@ -23,6 +23,9 @@ from homeassistant.helpers.event import async_track_state_change_event, async_tr
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    SOLAR_FORECAST_ATTRIBUTE,
+    SOLAR_FORECAST_KEEP_HOURS,
+    SOLAR_FORECAST_MAX_GAP_MINUTES,
     API_URL,
     BACKFILL_DAYS,
     BACKFILL_INTERVAL_HOURS,
@@ -58,6 +61,7 @@ from .const import (
     CONF_METER_PRODUCTION,
     CONF_NAME,
     CONF_PRODUCTION_ENTITY,
+    CONF_SOLAR_FORECAST,
     CONF_SUBTRACT_ENTITIES,
     CONF_UPDATE_INTERVAL,
     CONSUMER_NAME_LENGTH,
@@ -278,6 +282,46 @@ def _weather_15min(data: dict, period_start: datetime, period_end: datetime) -> 
     return result
 
 
+def _forecast_watts(hass, entity_ids: list[str]) -> dict[datetime, float]:
+    """The solar forecast of each quarter of an hour (UTC start -> W), all the sensors added up.
+
+    Each sensor (Open-Meteo Solar Forecast, Forecast.Solar) gives in its "watts" attribute the power expected at each time,
+    with its time zone; points further apart than 15 minutes are interpolated (up to 2 hours apart).
+    """
+    total: dict[datetime, float] = {}
+    for entity_id in entity_ids:
+        state = hass.states.get(entity_id)
+        watts = state.attributes.get(SOLAR_FORECAST_ATTRIBUTE) if state else None
+        if not isinstance(watts, dict):
+            continue
+        points = []
+        for key, value in watts.items():
+            moment = key if isinstance(key, datetime) else dt_util.parse_datetime(str(key))
+            try:
+                power = float(value)
+            except (TypeError, ValueError):
+                continue
+            if moment is None:
+                continue
+            if moment.tzinfo is None:
+                moment = moment.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
+            points.append((dt_util.as_utc(moment), max(0.0, power)))
+        points.sort()
+        for i, (moment, power) in enumerate(points):
+            bucket = _bucket_start(moment)
+            total[bucket] = total.get(bucket, 0.0) + power
+            if i + 1 < len(points):
+                following, following_power = points[i + 1]
+                gap = (following - moment).total_seconds()
+                if 0 < gap <= SOLAR_FORECAST_MAX_GAP_MINUTES * 60:
+                    step = bucket + timedelta(minutes=BUCKET_MINUTES)
+                    while step < following:
+                        share = (step - moment).total_seconds() / gap
+                        total[step] = total.get(step, 0.0) + power + (following_power - power) * share
+                        step += timedelta(minutes=BUCKET_MINUTES)
+    return total
+
+
 def _unit(hass, entity_id, default=""):
     state = hass.states.get(entity_id) if entity_id else None
     if state is None:
@@ -444,7 +488,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
         if battery_soc_entity:
             soc_history = await _get_history(hass, start, end, battery_soc_entity)
 
+        # The solar forecast: read now, and kept for the quarters sent later (the sensors only give today and tomorrow); sent
+        # from the start of the period, the future included, for the planning of the next day
+        forecasts = hass.data.setdefault(DOMAIN, {}).setdefault("solar_forecast", {})
+        forecasts.update(_forecast_watts(hass, entry.options.get(CONF_SOLAR_FORECAST, [])))
+        oldest = dt_util.utcnow() - timedelta(hours=SOLAR_FORECAST_KEEP_HOURS)
+        for moment in [m for m in forecasts if m < oldest]:
+            del forecasts[moment]
+        forecast_history = [
+            {"timestamp": moment.isoformat(), "value": round(power, 1)}
+            for moment, power in sorted(forecasts.items())
+            if moment >= start
+        ]
+
         payload = {
+            "productionForecast": forecast_history,
             "weatherHistory": await _get_weather(start, end),
             "productionUnit": prod_unit,
             "productionHistory": prod_history,

@@ -83,11 +83,12 @@
     "step": {
       "init": {
         "title": "APER HEMS",
-        "description": "Consommateurs : {consumers} · Bornes : {chargers} · Voitures : {cars}",
+        "description": "Consommateurs : {consumers} · Bornes : {chargers} · Voitures : {cars} · Prévisions solaires : {forecasts}",
         "menu_options": {
           "consumers": "Consommateurs",
           "chargers": "Bornes de recharge",
-          "cars": "Voitures électriques"
+          "cars": "Voitures électriques",
+          "solar_forecast": "Prévision solaire"
         }
       },
       "consumers": {
@@ -235,6 +236,13 @@
           "status_entity": "Capteur d'état : en charge, branchée, à la maison… (facultatif)",
           "capacity_kwh": "Capacité utile en kWh, pour estimer la durée de charge (facultatif)",
           "charger": "La borne où elle se recharge d'habitude, pour savoir quelle voiture est branchée où (facultatif)"
+        }
+      },
+      "solar_forecast": {
+        "title": "Prévision solaire",
+        "description": "Les capteurs de prévision de production (Open-Meteo Solar Forecast ou Forecast.Solar), un par pan de toit, par exemple « Production d'énergie estimée - aujourd'hui » et « - demain » : leurs prévisions (attribut watts) sont additionnées et envoyées avec les mesures de chaque quart d'heure.",
+        "data": {
+          "solar_forecast_entities": "Capteurs de prévision"
         }
       }
     },
