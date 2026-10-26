@@ -73,6 +73,20 @@ CONF_CAR_CHARGER = "charger"
 CONF_BATTERIES = "batteries"
 CONF_BATTERY_CAPACITY = "capacity_kwh"
 CONF_BATTERY_LEVEL_ENTITY = "soc_entity"
+# How the HEMS may use it: its lowest and highest level (%), what it gives back of what it takes (%), what a kWh through it
+# costs in wear (ct) and the level wanted at the end of the day (%), for the next night until the prices of the next day
+CONF_BATTERY_MIN_SOC = "min_soc"
+CONF_BATTERY_MAX_SOC = "max_soc"
+CONF_BATTERY_EFFICIENCY = "efficiency"
+CONF_BATTERY_WEAR = "wear_ct"
+CONF_BATTERY_END_SOC = "end_soc"
+BATTERY_DEFAULTS = {
+    CONF_BATTERY_MIN_SOC: 10,
+    CONF_BATTERY_MAX_SOC: 100,
+    CONF_BATTERY_EFFICIENCY: 90,
+    CONF_BATTERY_WEAR: 3,
+    CONF_BATTERY_END_SOC: 30,
+}
 
 DEFAULT_UPDATE_INTERVAL = 15
 

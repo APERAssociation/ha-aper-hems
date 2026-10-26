@@ -276,11 +276,21 @@
         "data": {
           "name": "Battery name",
           "capacity_kwh": "Capacity",
-          "soc_entity": "Battery level (%)"
+          "soc_entity": "Battery level (%)",
+          "min_soc": "Lowest level",
+          "max_soc": "Highest level",
+          "efficiency": "Efficiency",
+          "wear_ct": "Cost of a stored kWh (wear)",
+          "end_soc": "Level wanted at the end of the day"
         },
         "data_description": {
           "capacity_kwh": "Usable capacity in kWh",
-          "soc_entity": "State of charge sensor, from 0 to 100 % (optional)"
+          "soc_entity": "State of charge sensor, from 0 to 100 % (optional)",
+          "min_soc": "The HEMS does not empty it below",
+          "max_soc": "The HEMS does not charge it above",
+          "efficiency": "What it gives back of what it takes",
+          "wear_ct": "What a kWh through it costs in wear: a charge from the grid must earn more",
+          "end_soc": "At 23:59, for the next night until the prices of the next day"
         }
       },
       "edit_batterie": {
@@ -288,16 +298,27 @@
         "data": {
           "name": "Battery name",
           "capacity_kwh": "Capacity",
-          "soc_entity": "Battery level (%)"
+          "soc_entity": "Battery level (%)",
+          "min_soc": "Lowest level",
+          "max_soc": "Highest level",
+          "efficiency": "Efficiency",
+          "wear_ct": "Cost of a stored kWh (wear)",
+          "end_soc": "Level wanted at the end of the day"
         },
         "data_description": {
           "capacity_kwh": "Usable capacity in kWh",
-          "soc_entity": "State of charge sensor, from 0 to 100 % (optional)"
+          "soc_entity": "State of charge sensor, from 0 to 100 % (optional)",
+          "min_soc": "The HEMS does not empty it below",
+          "max_soc": "The HEMS does not charge it above",
+          "efficiency": "What it gives back of what it takes",
+          "wear_ct": "What a kWh through it costs in wear: a charge from the grid must earn more",
+          "end_soc": "At 23:59, for the next night until the prices of the next day"
         }
       }
     },
     "error": {
-      "current_range": "The maximum current must be at least the minimum current."
+      "current_range": "The maximum current must be at least the minimum current.",
+      "soc_range": "The highest level must be above the lowest"
     }
   }
 }

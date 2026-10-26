@@ -29,6 +29,12 @@ from .const import (
     CONF_BATTERIES,
     CONF_BATTERY_CAPACITY,
     CONF_BATTERY_LEVEL_ENTITY,
+    CONF_BATTERY_MIN_SOC,
+    CONF_BATTERY_MAX_SOC,
+    CONF_BATTERY_EFFICIENCY,
+    CONF_BATTERY_WEAR,
+    CONF_BATTERY_END_SOC,
+    BATTERY_DEFAULTS,
     CONF_FORECAST_TODAY_ENTITY,
     CONF_FORECAST_TOMORROW_ENTITY,
     CONF_SOLAR_FIELDS,
@@ -171,6 +177,8 @@ class AperHemsOptionsFlow(OptionsFlow):
     async def async_step_batteries(self, user_input=None):
         def describe(b):
             parts = [b[CONF_NAME], f"{b[CONF_BATTERY_CAPACITY]:g} kWh"]
+            if b.get(CONF_BATTERY_MIN_SOC) is not None:
+                parts.append(f"{b[CONF_BATTERY_MIN_SOC]:g}–{b[CONF_BATTERY_MAX_SOC]:g} %, fin de journée {b[CONF_BATTERY_END_SOC]:g} %")
             if b.get(CONF_BATTERY_LEVEL_ENTITY):
                 parts.append(f"niveau : {b[CONF_BATTERY_LEVEL_ENTITY]}")
             return "• " + ", ".join(parts)
@@ -179,15 +187,23 @@ class AperHemsOptionsFlow(OptionsFlow):
 
     async def async_step_add_batterie(self, user_input=None):
         return await self._edit_step("add_batterie", CONF_BATTERIES, self._battery_schema, self._battery_from_input,
-                                     user_input, adding=True)
+                                     user_input, adding=True, validate=self._battery_errors)
 
     async def async_step_edit_batterie(self, user_input=None):
         return await self._edit_step("edit_batterie", CONF_BATTERIES, self._battery_schema, self._battery_from_input,
-                                     user_input, adding=False)
+                                     user_input, adding=False, validate=self._battery_errors)
+
+    @staticmethod
+    def _battery_errors(user_input: dict) -> dict:
+        if user_input[CONF_BATTERY_MIN_SOC] >= user_input[CONF_BATTERY_MAX_SOC]:
+            return {CONF_BATTERY_MAX_SOC: "soc_range"}
+        return {}
 
     @staticmethod
     def _battery_from_input(user_input: dict) -> dict:
         battery = {CONF_NAME: user_input[CONF_NAME].strip(), CONF_BATTERY_CAPACITY: float(user_input[CONF_BATTERY_CAPACITY])}
+        for key in BATTERY_DEFAULTS:
+            battery[key] = float(user_input[key])
         if user_input.get(CONF_BATTERY_LEVEL_ENTITY):
             battery[CONF_BATTERY_LEVEL_ENTITY] = user_input[CONF_BATTERY_LEVEL_ENTITY]
         return battery
@@ -203,6 +219,13 @@ class AperHemsOptionsFlow(OptionsFlow):
         else:
             schema[vol.Required(CONF_BATTERY_CAPACITY)] = capacity
         _optional_entity(schema, CONF_BATTERY_LEVEL_ENTITY, d, EntitySelector(EntitySelectorConfig(domain=["sensor", "number"])))
+        percent = NumberSelector(NumberSelectorConfig(min=0, max=100, step=1, mode=NumberSelectorMode.BOX, unit_of_measurement="%"))
+        for key in (CONF_BATTERY_MIN_SOC, CONF_BATTERY_MAX_SOC, CONF_BATTERY_END_SOC):
+            schema[vol.Required(key, default=d.get(key, BATTERY_DEFAULTS[key]))] = percent
+        schema[vol.Required(CONF_BATTERY_EFFICIENCY, default=d.get(CONF_BATTERY_EFFICIENCY, BATTERY_DEFAULTS[CONF_BATTERY_EFFICIENCY]))] = \
+            NumberSelector(NumberSelectorConfig(min=50, max=100, step=1, mode=NumberSelectorMode.BOX, unit_of_measurement="%"))
+        schema[vol.Required(CONF_BATTERY_WEAR, default=d.get(CONF_BATTERY_WEAR, BATTERY_DEFAULTS[CONF_BATTERY_WEAR]))] = \
+            NumberSelector(NumberSelectorConfig(min=0, max=50, step=0.5, mode=NumberSelectorMode.BOX, unit_of_measurement="ct/kWh"))
         return vol.Schema(schema)
 
     # ---------- solar fields (forecast) ----------

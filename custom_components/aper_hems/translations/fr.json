@@ -276,11 +276,21 @@
         "data": {
           "name": "Nom de la batterie",
           "capacity_kwh": "Capacité",
-          "soc_entity": "Niveau de la batterie (%)"
+          "soc_entity": "Niveau de la batterie (%)",
+          "min_soc": "Niveau minimal",
+          "max_soc": "Niveau maximal",
+          "efficiency": "Rendement",
+          "wear_ct": "Coût du kWh stocké (usure)",
+          "end_soc": "Niveau souhaité en fin de journée"
         },
         "data_description": {
           "capacity_kwh": "Capacité utile en kWh",
-          "soc_entity": "Capteur de l'état de charge, de 0 à 100 % (facultatif)"
+          "soc_entity": "Capteur de l'état de charge, de 0 à 100 % (facultatif)",
+          "min_soc": "Le HEMS ne la vide pas en dessous",
+          "max_soc": "Le HEMS ne la charge pas au-dessus",
+          "efficiency": "Ce qu'elle rend de ce qu'elle prend",
+          "wear_ct": "Ce que coûte en usure un kWh qui passe par elle : une charge depuis le réseau doit rapporter plus",
+          "end_soc": "À 23:59, pour la nuit suivante en attendant les prix du lendemain"
         }
       },
       "edit_batterie": {
@@ -288,16 +298,27 @@
         "data": {
           "name": "Nom de la batterie",
           "capacity_kwh": "Capacité",
-          "soc_entity": "Niveau de la batterie (%)"
+          "soc_entity": "Niveau de la batterie (%)",
+          "min_soc": "Niveau minimal",
+          "max_soc": "Niveau maximal",
+          "efficiency": "Rendement",
+          "wear_ct": "Coût du kWh stocké (usure)",
+          "end_soc": "Niveau souhaité en fin de journée"
         },
         "data_description": {
           "capacity_kwh": "Capacité utile en kWh",
-          "soc_entity": "Capteur de l'état de charge, de 0 à 100 % (facultatif)"
+          "soc_entity": "Capteur de l'état de charge, de 0 à 100 % (facultatif)",
+          "min_soc": "Le HEMS ne la vide pas en dessous",
+          "max_soc": "Le HEMS ne la charge pas au-dessus",
+          "efficiency": "Ce qu'elle rend de ce qu'elle prend",
+          "wear_ct": "Ce que coûte en usure un kWh qui passe par elle : une charge depuis le réseau doit rapporter plus",
+          "end_soc": "À 23:59, pour la nuit suivante en attendant les prix du lendemain"
         }
       }
     },
     "error": {
-      "current_range": "Le courant maximal doit être au moins égal au courant minimal."
+      "current_range": "Le courant maximal doit être au moins égal au courant minimal.",
+      "soc_range": "Le niveau maximal doit être plus haut que le niveau minimal"
     }
   }
 }

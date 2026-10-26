@@ -34,6 +34,7 @@ from .const import (
     CONF_BATTERIES,
     CONF_BATTERY_CAPACITY,
     CONF_BATTERY_LEVEL_ENTITY,
+    BATTERY_DEFAULTS,
     CONF_BATTERY_CHARGE_POSITIVE,
     CONF_BATTERY_ENTITY,
     CONF_BATTERY_SOC_ENTITY,
@@ -867,6 +868,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
             "name": battery[CONF_NAME],
             "capacityKwh": battery.get(CONF_BATTERY_CAPACITY),
             "soc": _read_number(battery.get(CONF_BATTERY_LEVEL_ENTITY)),
+            "minSoc": battery.get("min_soc", BATTERY_DEFAULTS["min_soc"]),
+            "maxSoc": battery.get("max_soc", BATTERY_DEFAULTS["max_soc"]),
+            "efficiency": battery.get("efficiency", BATTERY_DEFAULTS["efficiency"]),
+            "wearCt": battery.get("wear_ct", BATTERY_DEFAULTS["wear_ct"]),
+            "endSoc": battery.get("end_soc", BATTERY_DEFAULTS["end_soc"]),
         } for battery in entry.options.get(CONF_BATTERIES, [])]
         return {"cars": cars, "chargers": chargers, "batteries": batteries}
 
