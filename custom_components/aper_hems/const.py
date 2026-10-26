@@ -68,6 +68,10 @@ CONF_CAR_STATUS_ENTITY = "status_entity"
 CONF_CAR_CAPACITY = "capacity_kwh"
 CONF_CAR_CHARGER = "charger"
 
+# The highest power the home can take from the grid (kW: its subscription, its main breaker): the HEMS never plans a charge
+# above it
+CONF_GRID_MAX_KW = "grid_max_kw"
+
 # The solar batteries of the home: their name, capacity and level (%), sent to the site with the cars (the simulator starts
 # from them)
 CONF_BATTERIES = "batteries"

@@ -85,6 +85,7 @@
         "title": "APER HEMS",
         "description": "Consommateurs : {consumers} · Bornes : {chargers} · Voitures : {cars} · Batteries : {batteries} · Champs solaires : {forecasts}",
         "menu_options": {
+          "grid": "Raccordement au réseau",
           "consumers": "Consommateurs",
           "chargers": "Bornes de recharge",
           "cars": "Voitures électriques",
@@ -321,6 +322,13 @@
           "end_soc": "À 23:59, pour la nuit suivante en attendant les prix du lendemain",
           "charge_kw": "La plus forte puissance à laquelle elle se charge",
           "discharge_kw": "La plus forte puissance qu'elle peut rendre à la maison"
+        }
+      },
+      "grid": {
+        "title": "Raccordement au réseau",
+        "description": "La puissance maximale que la maison peut tirer du réseau (son abonnement, son disjoncteur principal : 3 × 25 A ≈ 17 kW, 3 × 40 A ≈ 27 kW). Le HEMS ne planifie jamais de charge de la voiture ou de la batterie qui la dépasse.",
+        "data": {
+          "grid_max_kw": "Puissance maximale"
         }
       }
     },

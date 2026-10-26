@@ -85,6 +85,7 @@
         "title": "APER HEMS",
         "description": "Consumers: {consumers} · Charging stations: {chargers} · Cars: {cars} · Batteries: {batteries} · Solar fields: {forecasts}",
         "menu_options": {
+          "grid": "Grid connection",
           "consumers": "Consumers",
           "chargers": "Charging stations",
           "cars": "Electric cars",
@@ -321,6 +322,13 @@
           "end_soc": "At 23:59, for the next night until the prices of the next day",
           "charge_kw": "The highest power it charges at",
           "discharge_kw": "The highest power it can give to the home"
+        }
+      },
+      "grid": {
+        "title": "Grid connection",
+        "description": "The highest power the home can take from the grid (its subscription, its main breaker: 3 × 25 A ≈ 17 kW, 3 × 40 A ≈ 27 kW). The HEMS never plans a charge of the car or of the battery above it.",
+        "data": {
+          "grid_max_kw": "Highest power"
         }
       }
     },

@@ -31,6 +31,7 @@ from .const import (
     BACKFILL_INTERVAL_HOURS,
     BACKFILL_MAX_RETRIES,
     CONF_API_KEY,
+    CONF_GRID_MAX_KW,
     CONF_BATTERIES,
     CONF_BATTERY_CAPACITY,
     CONF_BATTERY_LEVEL_ENTITY,
@@ -876,7 +877,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
             "wearCt": battery.get("wear_ct", BATTERY_DEFAULTS["wear_ct"]),
             "endSoc": battery.get("end_soc", BATTERY_DEFAULTS["end_soc"]),
         } for battery in entry.options.get(CONF_BATTERIES, [])]
-        return {"cars": cars, "chargers": chargers, "batteries": batteries}
+        return {"cars": cars, "chargers": chargers, "batteries": batteries, "gridMaxKw": entry.options.get(CONF_GRID_MAX_KW)}
 
     devices = {"dirty": True, "busy": False, "last_sent": 0.0}
 
@@ -888,7 +889,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
         if devices["busy"]:
             return
         now = hass.loop.time()
-        configured = entry.options.get(CONF_CARS) or entry.options.get(CONF_CHARGERS) or entry.options.get(CONF_BATTERIES)
+        configured = (entry.options.get(CONF_CARS) or entry.options.get(CONF_CHARGERS) or entry.options.get(CONF_BATTERIES)
+                      or entry.options.get(CONF_GRID_MAX_KW))
         # Sent once after a start or a change of the options, even empty (the site then forgets the removed ones)
         if not devices["dirty"] and (not configured or now - devices["last_sent"] < DEVICES_HEARTBEAT_SECONDS):
             return

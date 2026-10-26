@@ -26,6 +26,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_API_KEY,
+    CONF_GRID_MAX_KW,
     CONF_BATTERIES,
     CONF_BATTERY_CAPACITY,
     CONF_BATTERY_LEVEL_ENTITY,
@@ -164,7 +165,7 @@ class AperHemsOptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input=None):
         return self.async_show_menu(
             step_id="init",
-            menu_options=["consumers", "chargers", "cars", "batteries", "solar_fields"],
+            menu_options=["grid", "consumers", "chargers", "cars", "batteries", "solar_fields"],
             description_placeholders={
                 "consumers": str(len(self._items(CONF_CONSUMERS))),
                 "chargers": str(len(self._items(CONF_CHARGERS))),
@@ -173,6 +174,19 @@ class AperHemsOptionsFlow(OptionsFlow):
                 "forecasts": str(len(self._items(CONF_SOLAR_FIELDS))),
             },
         )
+
+    # ---------- the connection to the grid ----------
+
+    async def async_step_grid(self, user_input=None):
+        if user_input is not None:
+            options = {k: v for k, v in self.config_entry.options.items() if k != CONF_GRID_MAX_KW}
+            if user_input.get(CONF_GRID_MAX_KW):
+                options[CONF_GRID_MAX_KW] = float(user_input[CONF_GRID_MAX_KW])
+            return self.async_create_entry(data=options)
+        power = NumberSelector(NumberSelectorConfig(min=1, max=500, step=0.1, mode=NumberSelectorMode.BOX, unit_of_measurement="kW"))
+        current = self.config_entry.options.get(CONF_GRID_MAX_KW)
+        key = vol.Optional(CONF_GRID_MAX_KW, default=current) if current else vol.Optional(CONF_GRID_MAX_KW)
+        return self.async_show_form(step_id="grid", data_schema=vol.Schema({key: power}))
 
     # ---------- solar batteries ----------
 
