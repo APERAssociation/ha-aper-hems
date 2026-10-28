@@ -90,7 +90,8 @@
           "chargers": "Charging stations",
           "cars": "Electric cars",
           "solar_fields": "Solar fields (forecast)",
-          "batteries": "Solar batteries"
+          "batteries": "Solar batteries",
+          "planning": "HEMS planning"
         }
       },
       "consumers": {
@@ -330,11 +331,19 @@
         "data": {
           "grid_max_kw": "Highest power"
         }
+      },
+      "planning": {
+        "title": "HEMS planning",
+        "description": "The sensor where the plugin writes the planning of the HEMS, read from the site every 5 minutes. Its state: where the home takes its energy in the current quarter of an hour (charge_grid, grid_only, solar, discharge, none); a second sensor with the same name ending in \"_car\": what the car does (charge, wait, none). Today's and tomorrow's planning is in the \"planning\" attribute. Leave empty not to receive it.",
+        "data": {
+          "planning_entity": "Planning sensor"
+        }
       }
     },
     "error": {
       "current_range": "The maximum current must be at least the minimum current.",
-      "soc_range": "The highest level must be above the lowest"
+      "soc_range": "The highest level must be above the lowest",
+      "planning_entity": "A sensor, for example sensor.aper_hems_planning (lower case letters, digits and _)."
     }
   }
 }

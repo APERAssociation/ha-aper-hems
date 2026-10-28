@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from datetime import timedelta
 
 import aiohttp
@@ -27,6 +28,8 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_API_KEY,
     CONF_GRID_MAX_KW,
+    CONF_PLANNING_ENTITY,
+    DEFAULT_PLANNING_ENTITY,
     CONF_BATTERIES,
     CONF_BATTERY_CAPACITY,
     CONF_BATTERY_LEVEL_ENTITY,
@@ -165,7 +168,7 @@ class AperHemsOptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input=None):
         return self.async_show_menu(
             step_id="init",
-            menu_options=["grid", "consumers", "chargers", "cars", "batteries", "solar_fields"],
+            menu_options=["grid", "consumers", "chargers", "cars", "batteries", "solar_fields", "planning"],
             description_placeholders={
                 "consumers": str(len(self._items(CONF_CONSUMERS))),
                 "chargers": str(len(self._items(CONF_CHARGERS))),
@@ -187,6 +190,25 @@ class AperHemsOptionsFlow(OptionsFlow):
         current = self.config_entry.options.get(CONF_GRID_MAX_KW)
         key = vol.Optional(CONF_GRID_MAX_KW, default=current) if current else vol.Optional(CONF_GRID_MAX_KW)
         return self.async_show_form(step_id="grid", data_schema=vol.Schema({key: power}))
+
+    # ---------- the planning of the HEMS ----------
+
+    async def async_step_planning(self, user_input=None):
+        errors = {}
+        if user_input is not None:
+            entity_id = (user_input.get(CONF_PLANNING_ENTITY) or "").strip().lower()
+            if entity_id and not re.fullmatch(r"sensor\.[a-z0-9_]+", entity_id):
+                errors[CONF_PLANNING_ENTITY] = "planning_entity"
+            else:
+                options = {k: v for k, v in self.config_entry.options.items() if k != CONF_PLANNING_ENTITY}
+                options[CONF_PLANNING_ENTITY] = entity_id
+                return self.async_create_entry(data=options)
+        current = self.config_entry.options.get(CONF_PLANNING_ENTITY, DEFAULT_PLANNING_ENTITY)
+        return self.async_show_form(
+            step_id="planning",
+            data_schema=vol.Schema({vol.Optional(CONF_PLANNING_ENTITY, default=current): TextSelector(TextSelectorConfig())}),
+            errors=errors,
+        )
 
     # ---------- solar batteries ----------
 

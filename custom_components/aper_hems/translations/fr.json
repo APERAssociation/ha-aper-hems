@@ -90,7 +90,8 @@
           "chargers": "Bornes de recharge",
           "cars": "Voitures électriques",
           "solar_fields": "Champs solaires (prévision)",
-          "batteries": "Batteries solaires"
+          "batteries": "Batteries solaires",
+          "planning": "Planning du HEMS"
         }
       },
       "consumers": {
@@ -330,11 +331,19 @@
         "data": {
           "grid_max_kw": "Puissance maximale"
         }
+      },
+      "planning": {
+        "title": "Planning du HEMS",
+        "description": "Le capteur où le plugin écrit le planning du HEMS, relu sur le site toutes les 5 minutes. Son état : d'où la maison prend son énergie dans le quart d'heure en cours (charge_grid, grid_only, solar, discharge, none) ; un 2e capteur du même nom finissant par « _car » : ce que fait la voiture (charge, wait, none). Le planning du jour et de demain est dans l'attribut « planning ». Laisser vide pour ne pas le recevoir.",
+        "data": {
+          "planning_entity": "Capteur du planning"
+        }
       }
     },
     "error": {
       "current_range": "Le courant maximal doit être au moins égal au courant minimal.",
-      "soc_range": "Le niveau maximal doit être plus haut que le niveau minimal"
+      "soc_range": "Le niveau maximal doit être plus haut que le niveau minimal",
+      "planning_entity": "Un capteur, par exemple sensor.aper_hems_planning (lettres minuscules, chiffres et _)."
     }
   }
 }

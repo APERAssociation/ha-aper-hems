@@ -71,6 +71,9 @@ CONF_CAR_CHARGER = "charger"
 # The highest power the home can take from the grid (kW: its subscription, its main breaker): the HEMS never plans a charge
 # above it
 CONF_GRID_MAX_KW = "grid_max_kw"
+# The entity that receives the planning of the HEMS (a sensor written by the plugin, e.g. "sensor.aper_hems_planning"; empty: none)
+CONF_PLANNING_ENTITY = "planning_entity"
+DEFAULT_PLANNING_ENTITY = "sensor.aper_hems_planning"
 
 # The solar batteries of the home: their name, capacity and level (%), sent to the site with the cars (the simulator starts
 # from them)
@@ -108,6 +111,10 @@ COVERAGE_API_URL = f"{API_BASE_URL}/api/energydata/coverage"
 DEVICES_API_URL = f"{API_BASE_URL}/api/energydata/devices"
 DEVICES_MIN_SECONDS = 10
 DEVICES_HEARTBEAT_SECONDS = 300
+# The planning of the HEMS by quarter of an hour (today and tomorrow), fetched every 5 minutes; the entities follow the quarter
+# of an hour in progress every minute
+PLANNING_API_URL = f"{API_BASE_URL}/api/energydata/planning?days=2"
+PLANNING_REFRESH_SECONDS = 300
 # Live values for the cockpit: a WebSocket kept open to the site, which says when a cockpit is watching
 # ("watch" message). Values are then sent at each change (at most once a second) and every 10 s anyway.
 LIVE_WS_URL = "wss://aper-association.ch/api/energydata/live"

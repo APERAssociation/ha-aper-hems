@@ -32,6 +32,10 @@ from .const import (
     BACKFILL_MAX_RETRIES,
     CONF_API_KEY,
     CONF_GRID_MAX_KW,
+    CONF_PLANNING_ENTITY,
+    DEFAULT_PLANNING_ENTITY,
+    PLANNING_API_URL,
+    PLANNING_REFRESH_SECONDS,
     CONF_BATTERIES,
     CONF_BATTERY_CAPACITY,
     CONF_BATTERY_LEVEL_ENTITY,
@@ -925,6 +929,83 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
         entry.async_on_unload(async_track_state_change_event(hass, device_entities, _devices_changed))
     entry.async_on_unload(async_track_time_interval(hass, _devices_tick, timedelta(seconds=DEVICES_MIN_SECONDS)))
 
+    # The planning of the HEMS: fetched every 5 minutes, written every minute into the sensor chosen (its state: where the home
+    # takes its energy in the current quarter of an hour) and into the same name ending in "_car" (what the car does)
+    planning_entity = entry.options.get(CONF_PLANNING_ENTITY, DEFAULT_PLANNING_ENTITY)
+    planning = {"data": None, "fetched": 0.0, "busy": False}
+
+    def _planning_write() -> None:
+        data = planning["data"]
+        if not data:
+            return
+        now = dt_util.utcnow()
+        quarters = []
+        for quarter in data.get("quarters", []):
+            start = dt_util.parse_datetime(quarter["start"])
+            if start is not None:
+                quarters.append((start, quarter))
+        current = next((q for start, q in reversed(quarters) if start <= now), None)
+        coming = [(start, q) for start, q in quarters if start + timedelta(minutes=15) > now]
+        if current is None:
+            return
+        # When the source and the car change next
+        next_source = next((start for start, q in coming if q["source"] != current["source"]), None)
+        next_car = next((start for start, q in coming if q["car"] != current["car"]), None)
+        local = lambda dt: dt_util.as_local(dt).isoformat() if dt else None
+        common = {
+            "car_name": data.get("carName"),
+            "battery_soc": current.get("batterySoc"),
+            "planned_soc": current.get("plannedSoc"),
+            "price": current.get("price"),
+            "generated_at": data.get("generatedAt"),
+        }
+        hass.states.async_set(planning_entity, current["source"], {
+            "friendly_name": "Planning APER HEMS",
+            "icon": "mdi:calendar-clock",
+            "label": current.get("sourceLabel"),
+            "next_change": local(next_source),
+            **common,
+            # The next 24 hours from the quarter of an hour in progress (more would be too big for the recorder)
+            "planning": [{
+                "start": local(start), "source": q["source"], "car": q["car"], "car_current_a": q.get("carCurrentA", 0),
+                "battery_soc": q.get("batterySoc"), "planned_soc": q.get("plannedSoc"), "price": q.get("price"),
+            } for start, q in coming[:96]],
+        })
+        hass.states.async_set(f"{planning_entity}_car", current["car"], {
+            "friendly_name": "Planning APER HEMS (voiture)",
+            "icon": "mdi:car-electric",
+            "label": current.get("carLabel"),
+            "current_a": current.get("carCurrentA", 0),
+            "phases": current.get("carPhases", 0),
+            "next_change": local(next_car),
+            **common,
+        })
+
+    async def _planning_tick(_now=None):
+        if not planning_entity:
+            return
+        loop_now = hass.loop.time()
+        if not planning["busy"] and loop_now - planning["fetched"] >= PLANNING_REFRESH_SECONDS:
+            planning["busy"] = True
+            planning["fetched"] = loop_now
+            try:
+                async with session.get(PLANNING_API_URL, headers=headers, timeout=aiohttp.ClientTimeout(total=60)) as resp:
+                    if resp.status == 200:
+                        planning["data"] = await resp.json()
+                    else:
+                        _LOGGER.debug("Planning: HTTP %s", resp.status)
+            except asyncio.CancelledError:
+                raise
+            except (aiohttp.ClientError, asyncio.TimeoutError, OSError, ValueError) as err:
+                # Tried again in a minute
+                planning["fetched"] = loop_now - PLANNING_REFRESH_SECONDS + 60
+                _LOGGER.debug("Planning not received: %s", type(err).__name__)
+            finally:
+                planning["busy"] = False
+        _planning_write()
+
+    entry.async_on_unload(async_track_time_interval(hass, _planning_tick, timedelta(minutes=1)))
+
     live_entities = [eid for eid in (grid_entity, production_entity, battery_entity, battery_soc_entity) if eid]
     for consumer in entry.options.get(CONF_CONSUMERS, []):
         live_entities.append(consumer.get(CONF_CONSUMER_POWER_ENTITY) or consumer["entity"])
@@ -937,6 +1018,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
     async def _delayed_start():
+        await _planning_tick()
         await asyncio.sleep(60)
         await _send_data()
         await _backfill()
