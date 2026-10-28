@@ -34,6 +34,15 @@ from .const import (
     CONF_GRID_MAX_KW,
     CONF_PLANNING_ENTITY,
     DEFAULT_PLANNING_ENTITY,
+    CONF_CONTROL_MODE_ENTITY,
+    CONF_CONTROL_CHARGE_GRID,
+    CONF_CONTROL_GRID_ONLY,
+    CONF_CONTROL_AUTO,
+    CONF_CONTROL_TEST,
+    CONTROL_DEFAULTS,
+    CONTROL_COMMANDS_ENTITY,
+    CONTROL_MAX_PLANNING_AGE_MINUTES,
+    PILOTE_ACTIONS,
     PLANNING_API_URL,
     PLANNING_REFRESH_SECONDS,
     CONF_BATTERIES,
@@ -936,7 +945,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
 
     def _planning_write() -> None:
         data = planning["data"]
-        if not data:
+        if not data or not planning_entity:
             return
         now = dt_util.utcnow()
         quarters = []
@@ -952,8 +961,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
         next_source = next((start for start, q in coming if q["source"] != current["source"]), None)
         next_car = next((start for start, q in coming if q["car"] != current["car"]), None)
         local = lambda dt: dt_util.as_local(dt).isoformat() if dt else None
+        generated = dt_util.parse_datetime(data.get("generatedAt") or "")
         common = {
             "car_name": data.get("carName"),
+            # How old the planning is: above 30 minutes it should not be followed any more
+            "age_minutes": round((now - generated).total_seconds() / 60) if generated else None,
             "battery_soc": current.get("batterySoc"),
             "planned_soc": current.get("plannedSoc"),
             "price": current.get("price"),
@@ -968,8 +980,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
             # The next 24 hours from the quarter of an hour in progress (more would be too big for the recorder)
             "planning": [{
                 "start": local(start), "source": q["source"], "car": q["car"], "car_current_a": q.get("carCurrentA", 0),
+                "car_source": q.get("carSource", "none"),
                 "battery_soc": q.get("batterySoc"), "planned_soc": q.get("plannedSoc"), "price": q.get("price"),
             } for start, q in coming[:96]],
+        })
+        # As sensor.action_energie_actuelle of the Pilote project: Charging, Discharging, Consommation sur le Grid
+        hass.states.async_set(f"{planning_entity}_action", PILOTE_ACTIONS.get(current["source"], "none"), {
+            "friendly_name": "Planning APER HEMS (action)",
+            "icon": "mdi:battery-clock",
+            "source": current["source"],
+            "next_change": local(next_source),
+            "generated_at": data.get("generatedAt"),
         })
         hass.states.async_set(f"{planning_entity}_car", current["car"], {
             "friendly_name": "Planning APER HEMS (voiture)",
@@ -977,12 +998,70 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
             "label": current.get("carLabel"),
             "current_a": current.get("carCurrentA", 0),
             "phases": current.get("carPhases", 0),
+            # As sensor.ve_charging_slot of the Pilote project
+            "slot": current["car"] == "charge",
+            # Where its energy comes from: solar (planned on the surplus by "Solaire d'abord": follow it), grid (at the current
+            # planned, the battery does not give to it), battery
+            "source": current.get("carSource", "none"),
+            # Its charge mode, and whether an unexpected solar surplus may go into it ("Solaire d'abord", in its ranges, not full)
+            "mode": data.get("carMode"),
+            "solar_allowed": current.get("solarAllowed", False),
             "next_change": local(next_car),
             **common,
         })
 
+    # The control of the battery: the mode entity set to the option of the source of the quarter of an hour in progress, only
+    # when it changes (a manual change holds until the next one); in test mode, only written into the commands sensor
+    control = {**CONTROL_DEFAULTS, **{k: v for k, v in entry.options.items() if k in CONTROL_DEFAULTS or k == CONF_CONTROL_MODE_ENTITY}}
+    control_entity = control.get(CONF_CONTROL_MODE_ENTITY)
+    control_options = {
+        "charge_grid": control[CONF_CONTROL_CHARGE_GRID],
+        "grid_only": control[CONF_CONTROL_GRID_ONLY],
+        "solar": control[CONF_CONTROL_AUTO],
+        "discharge": control[CONF_CONTROL_AUTO],
+    }
+    control_state = {"last": None}
+
+    async def _control() -> None:
+        if not control_entity:
+            return
+        data = planning["data"] or {}
+        generated = dt_util.parse_datetime(data.get("generatedAt") or "")
+        now = dt_util.utcnow()
+        source, reason = None, None
+        if generated is None or now - generated > timedelta(minutes=CONTROL_MAX_PLANNING_AGE_MINUTES):
+            # No recent planning: self-consumption
+            source, reason = "solar", "planning trop ancien"
+        else:
+            for quarter in data.get("quarters", []):
+                start = dt_util.parse_datetime(quarter["start"])
+                if start is not None and start <= now < start + timedelta(minutes=15):
+                    source, reason = quarter["source"], quarter.get("sourceLabel")
+        option = control_options.get(source)
+        if not option or option == control_state["last"]:
+            return
+        control_state["last"] = option
+        test = bool(control[CONF_CONTROL_TEST])
+        if not test:
+            domain = control_entity.split(".")[0]
+            try:
+                await hass.services.async_call(domain, "select_option", {"entity_id": control_entity, "option": option}, blocking=True)
+            except Exception as err:  # noqa: BLE001 - an unknown option or a missing entity must not stop the plugin
+                control_state["last"] = None
+                _LOGGER.warning("Battery control: %s not set to %s: %s", control_entity, option, err)
+                return
+        hass.states.async_set(CONTROL_COMMANDS_ENTITY, option, {
+            "friendly_name": "Commandes APER HEMS",
+            "icon": "mdi:battery-sync",
+            "entity": control_entity,
+            "source": source,
+            "reason": reason,
+            "test": test,
+            "sent_at": dt_util.as_local(now).isoformat(),
+        })
+
     async def _planning_tick(_now=None):
-        if not planning_entity:
+        if not planning_entity and not control_entity:
             return
         loop_now = hass.loop.time()
         if not planning["busy"] and loop_now - planning["fetched"] >= PLANNING_REFRESH_SECONDS:
@@ -1003,6 +1082,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
             finally:
                 planning["busy"] = False
         _planning_write()
+        await _control()
 
     entry.async_on_unload(async_track_time_interval(hass, _planning_tick, timedelta(minutes=1)))
 

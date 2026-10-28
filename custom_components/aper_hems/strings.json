@@ -91,7 +91,8 @@
           "cars": "Electric cars",
           "solar_fields": "Solar fields (forecast)",
           "batteries": "Solar batteries",
-          "planning": "HEMS planning"
+          "planning": "HEMS planning",
+          "control": "Battery control"
         }
       },
       "consumers": {
@@ -337,6 +338,17 @@
         "description": "The sensor where the plugin writes the planning of the HEMS, read from the site every 5 minutes. Its state: where the home takes its energy in the current quarter of an hour (charge_grid, grid_only, solar, discharge, none); a second sensor with the same name ending in \"_car\": what the car does (charge, wait, none). Today's and tomorrow's planning is in the \"planning\" attribute. Leave empty not to receive it.",
         "data": {
           "planning_entity": "Planning sensor"
+        }
+      },
+      "control": {
+        "title": "Battery control",
+        "description": "At each quarter of an hour, the plugin sets the mode entity to the option that matches the planning of the HEMS: your automation then sets the setpoints. Planning too old (over 30 min): back to self-consumption. In test mode nothing is changed: what would have been sent is written into sensor.aper_hems_commandes. Clear the mode entity to stop the control.",
+        "data": {
+          "control_mode_entity": "Battery mode entity",
+          "control_charge_grid": "Option for \"Charge Bat\" (charge from the grid)",
+          "control_grid_only": "Option for \"Consommer sur le grid\" (no discharge, the sun charges alone)",
+          "control_auto": "Option for self-consumption (solar charge, battery discharge)",
+          "control_test": "Test mode (controls nothing)"
         }
       }
     },

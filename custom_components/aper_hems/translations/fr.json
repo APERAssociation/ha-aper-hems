@@ -91,7 +91,8 @@
           "cars": "Voitures électriques",
           "solar_fields": "Champs solaires (prévision)",
           "batteries": "Batteries solaires",
-          "planning": "Planning du HEMS"
+          "planning": "Planning du HEMS",
+          "control": "Pilotage de la batterie"
         }
       },
       "consumers": {
@@ -337,6 +338,17 @@
         "description": "Le capteur où le plugin écrit le planning du HEMS, relu sur le site toutes les 5 minutes. Son état : d'où la maison prend son énergie dans le quart d'heure en cours (charge_grid, grid_only, solar, discharge, none) ; un 2e capteur du même nom finissant par « _car » : ce que fait la voiture (charge, wait, none). Le planning du jour et de demain est dans l'attribut « planning ». Laisser vide pour ne pas le recevoir.",
         "data": {
           "planning_entity": "Capteur du planning"
+        }
+      },
+      "control": {
+        "title": "Pilotage de la batterie",
+        "description": "À chaque quart d'heure, le plugin met l'entité du mode sur l'option qui correspond au planning du HEMS : votre automatisation règle ensuite les consignes. Planning trop ancien (plus de 30 min) : retour à l'autoconsommation. En mode test, rien n'est changé : ce qui aurait été envoyé est écrit dans sensor.aper_hems_commandes. Vider l'entité du mode pour arrêter le pilotage.",
+        "data": {
+          "control_mode_entity": "Entité du mode de la batterie",
+          "control_charge_grid": "Option pour « Charge Bat » (charge sur le réseau)",
+          "control_grid_only": "Option pour « Consommer sur le grid » (pas de décharge, le soleil charge seul)",
+          "control_auto": "Option pour l'autoconsommation (Charge solaire, Décharge batterie)",
+          "control_test": "Mode test (ne commande rien)"
         }
       }
     },

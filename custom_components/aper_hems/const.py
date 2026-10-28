@@ -74,6 +74,30 @@ CONF_GRID_MAX_KW = "grid_max_kw"
 # The entity that receives the planning of the HEMS (a sensor written by the plugin, e.g. "sensor.aper_hems_planning"; empty: none)
 CONF_PLANNING_ENTITY = "planning_entity"
 DEFAULT_PLANNING_ENTITY = "sensor.aper_hems_planning"
+# Control of the battery: the mode entity (input_select or select) set at each quarter of an hour from the planning, the option
+# for each source of the planning, and the test mode (nothing is set, what would be is written into the commands sensor)
+CONF_CONTROL_MODE_ENTITY = "control_mode_entity"
+CONF_CONTROL_CHARGE_GRID = "control_charge_grid"
+CONF_CONTROL_GRID_ONLY = "control_grid_only"
+CONF_CONTROL_AUTO = "control_auto"
+CONF_CONTROL_TEST = "control_test"
+CONTROL_DEFAULTS = {
+    CONF_CONTROL_CHARGE_GRID: "Chargement Tarifs Dynamiques",
+    CONF_CONTROL_GRID_ONLY: "Mode Charge Solaire Seule",
+    CONF_CONTROL_AUTO: "Mode Autoconsommation",
+    CONF_CONTROL_TEST: True,
+}
+CONTROL_COMMANDS_ENTITY = "sensor.aper_hems_commandes"
+# The action of the quarter of an hour in progress with the words of the Pilote project (sensor.action_energie_actuelle), written
+# into the planning sensor's name ending in "_action", so that the automations made for it work as they are
+PILOTE_ACTIONS = {
+    "charge_grid": "Charging",
+    "grid_only": "Consommation sur le Grid",
+    "solar": "Discharging",
+    "discharge": "Discharging",
+}
+# A planning older than this is not followed any more: the battery goes back to self-consumption
+CONTROL_MAX_PLANNING_AGE_MINUTES = 30
 
 # The solar batteries of the home: their name, capacity and level (%), sent to the site with the cars (the simulator starts
 # from them)

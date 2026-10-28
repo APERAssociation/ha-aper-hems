@@ -30,6 +30,12 @@ from .const import (
     CONF_GRID_MAX_KW,
     CONF_PLANNING_ENTITY,
     DEFAULT_PLANNING_ENTITY,
+    CONF_CONTROL_MODE_ENTITY,
+    CONF_CONTROL_CHARGE_GRID,
+    CONF_CONTROL_GRID_ONLY,
+    CONF_CONTROL_AUTO,
+    CONF_CONTROL_TEST,
+    CONTROL_DEFAULTS,
     CONF_BATTERIES,
     CONF_BATTERY_CAPACITY,
     CONF_BATTERY_LEVEL_ENTITY,
@@ -168,7 +174,7 @@ class AperHemsOptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input=None):
         return self.async_show_menu(
             step_id="init",
-            menu_options=["grid", "consumers", "chargers", "cars", "batteries", "solar_fields", "planning"],
+            menu_options=["grid", "consumers", "chargers", "cars", "batteries", "solar_fields", "planning", "control"],
             description_placeholders={
                 "consumers": str(len(self._items(CONF_CONSUMERS))),
                 "chargers": str(len(self._items(CONF_CHARGERS))),
@@ -209,6 +215,27 @@ class AperHemsOptionsFlow(OptionsFlow):
             data_schema=vol.Schema({vol.Optional(CONF_PLANNING_ENTITY, default=current): TextSelector(TextSelectorConfig())}),
             errors=errors,
         )
+
+    # ---------- the control of the battery ----------
+
+    async def async_step_control(self, user_input=None):
+        keys = (CONF_CONTROL_MODE_ENTITY, CONF_CONTROL_CHARGE_GRID, CONF_CONTROL_GRID_ONLY, CONF_CONTROL_AUTO, CONF_CONTROL_TEST)
+        if user_input is not None:
+            options = {k: v for k, v in self.config_entry.options.items() if k not in keys}
+            if user_input.get(CONF_CONTROL_MODE_ENTITY):
+                options.update({k: user_input[k] for k in keys if k in user_input})
+            return self.async_create_entry(data=options)
+        current = {**CONTROL_DEFAULTS, **{k: v for k, v in self.config_entry.options.items() if k in keys}}
+        mode = current.get(CONF_CONTROL_MODE_ENTITY)
+        schema = {
+            (vol.Optional(CONF_CONTROL_MODE_ENTITY, default=mode) if mode else vol.Optional(CONF_CONTROL_MODE_ENTITY)):
+                EntitySelector(EntitySelectorConfig(domain=["input_select", "select"])),
+            vol.Required(CONF_CONTROL_CHARGE_GRID, default=current[CONF_CONTROL_CHARGE_GRID]): TextSelector(TextSelectorConfig()),
+            vol.Required(CONF_CONTROL_GRID_ONLY, default=current[CONF_CONTROL_GRID_ONLY]): TextSelector(TextSelectorConfig()),
+            vol.Required(CONF_CONTROL_AUTO, default=current[CONF_CONTROL_AUTO]): TextSelector(TextSelectorConfig()),
+            vol.Required(CONF_CONTROL_TEST, default=current[CONF_CONTROL_TEST]): BooleanSelector(),
+        }
+        return self.async_show_form(step_id="control", data_schema=vol.Schema(schema))
 
     # ---------- solar batteries ----------
 
