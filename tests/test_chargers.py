@@ -99,7 +99,7 @@ def planning(car="charge", source="grid", mode="best_price", generated=NOW, char
 class Harness:
     """The control on a fake Wallbox, with the sun and the grid it reads."""
 
-    def __init__(self, station: FakeWallbox, production=0.0, grid=0.0, battery=0.0):
+    def __init__(self, station: FakeWallbox, production=0.0, grid=0.0, battery=0.0, grid_max_w=None):
         self.station = station
         self.production = production
         self.grid = grid
@@ -109,10 +109,14 @@ class Harness:
             station, [CHARGER],
             live_values=lambda: {"grid": self.grid, "battery": self.battery},
             production_w=lambda: self.production,
-            log=lambda name, command, reason, test, **extra: self.log.append((command, reason)))
+            log=lambda name, command, reason, test, **extra: self.log.append((command, reason)),
+            grid_max_w=grid_max_w)
 
     async def tick(self, data, minutes=0, test=False):
         await self.control.tick(data, NOW + timedelta(minutes=minutes), test)
+
+    async def protect(self, data, minutes=0, test=False):
+        await self.control.protect(data, NOW + timedelta(minutes=minutes), test)
 
     def commands(self) -> list[str]:
         return [command for command, _ in self.log]
@@ -286,6 +290,74 @@ class ControlTests(unittest.IsolatedAsyncioTestCase):
         await h.tick(planning("charge"), minutes=1)
         self.assertEqual(station.sent(), ["start", "start"])
         self.assertEqual(station.status, "Charging")
+
+
+class GridLimitTests(unittest.IsolatedAsyncioTestCase):
+    """The connection's limit: 12 kW here; a three-phase car takes 692.8 W per ampere (16 A ≈ 11.1 kW)."""
+
+    async def test_lowers_the_car_when_the_import_goes_above(self):
+        # 16 A (11085 W) and the house: 13000 W bought, 1000 W too many → 14 A
+        h = Harness(FakeWallbox(status="Charging", current=16), grid=13000, grid_max_w=12000)
+        await h.tick(planning("charge"))
+        self.assertEqual(h.station.sent(), ["14 A"])
+        self.assertIn("Raccordement 12 kW", h.log[-1][1])
+
+    async def test_raises_it_again_when_the_house_takes_less(self):
+        h = Harness(FakeWallbox(status="Charging", current=16), grid=13000, grid_max_w=12000)
+        await h.tick(planning("charge"))
+        # The oven off: 14 A (9699 W) + 500 W
+        h.grid = 10199
+        await h.tick(planning("charge"), minutes=1)
+        self.assertEqual(h.station.sent(), ["14 A", "16 A"])
+
+    async def test_raises_only_with_a_margin(self):
+        h = Harness(FakeWallbox(status="Charging", current=14), grid=11800, grid_max_w=12000)
+        # 200 W left: 15 A would take 693 W more, not raised
+        await h.tick(planning("charge"))
+        self.assertEqual(h.station.sent(), [])
+
+    async def test_never_below_the_lowest_current(self):
+        h = Harness(FakeWallbox(status="Charging", current=16), grid=20000, grid_max_w=12000)
+        await h.tick(planning("charge"))
+        self.assertEqual(h.station.sent(), ["6 A"])
+
+    async def test_a_start_above_the_limit_is_lowered_as_soon_as_the_grid_shows_it(self):
+        # The house takes 5000 W; started at 16 A, the grid then shows 16085 W: 7000 W left → 10 A (6928 W)
+        h = Harness(FakeWallbox(status="Preparing", current=16), grid=5000, grid_max_w=12000)
+        await h.tick(planning("charge"))
+        h.grid = 5000 + 11085
+        await h.protect(planning("charge"), minutes=0.1)
+        self.assertEqual(h.station.sent(), ["start", "10 A"])
+
+    async def test_protect_lowers_at_once_between_two_minutes(self):
+        h = Harness(FakeWallbox(status="Charging", current=16), grid=11000, grid_max_w=12000)
+        await h.tick(planning("charge"))
+        self.assertEqual(h.station.sent(), [])
+        # The heat pump starts: 13500 W
+        h.grid = 13500
+        await h.protect(planning("charge"), minutes=0.2)
+        self.assertEqual(h.station.sent(), ["13 A"])
+        # It never raises
+        h.grid = 8000
+        await h.protect(planning("charge"), minutes=0.3)
+        self.assertEqual(h.station.sent(), ["13 A"])
+
+    async def test_a_charge_started_by_hand_is_protected_and_given_back(self):
+        h = Harness(FakeWallbox(status="Charging", current=16), grid=11000, grid_max_w=12000)
+        await h.tick(planning("wait"), minutes=0)
+        h.station.calls.clear()
+        h.station.status, h.station.current = "Charging", 16
+        h.grid = 13500
+        await h.protect(planning("wait"), minutes=0.5)
+        self.assertEqual(h.station.sent(), ["13 A"])
+        h.grid = 9500
+        await h.tick(planning("wait"), minutes=1)
+        self.assertEqual(h.station.sent(), ["13 A", "16 A"])
+
+    async def test_solar_first_stays_on_the_surplus(self):
+        h = Harness(FakeWallbox(status="Charging", current=6), production=9000, grid=-2000, battery=1000, grid_max_w=12000)
+        await h.tick(planning("charge", source="solar", mode="solar_first"))
+        self.assertEqual(h.station.sent(), ["10 A"])
 
 
 class CheckTests(unittest.IsolatedAsyncioTestCase):

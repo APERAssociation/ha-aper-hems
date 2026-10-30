@@ -51,6 +51,7 @@ from .const import (
     CHARGERS_CONTROL_DEFAULTS,
     CONF_CHARGERS_CONTROL,
     CONF_CHARGERS_CONTROL_TEST,
+    GRID_PROTECT_SECONDS,
     DEFAULT_MAX_CURRENT,
     DEFAULT_MIN_CURRENT,
     PHASES_MONO,
@@ -1086,9 +1087,32 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
             **extra,
         })
 
+    grid_max_kw = entry.options.get(CONF_GRID_MAX_KW)
     charger_control = ChargerControl(
         hass, entry.options.get(CONF_CHARGERS, []), _live_values, lambda: _read_power_w(production_entity),
-        _charger_log, _LOGGER.warning)
+        _charger_log, _LOGGER.warning, grid_max_w=float(grid_max_kw) * 1000 if grid_max_kw else None)
+    protect = {"last": 0.0, "busy": False}
+
+    async def _protect() -> None:
+        try:
+            await charger_control.protect(planning["data"], dt_util.utcnow(), bool(chargers_control[CONF_CHARGERS_CONTROL_TEST]))
+        finally:
+            protect["busy"] = False
+
+    @callback
+    def _grid_changed(_event: Event) -> None:
+        # The connection's limit: looked at, at most, every few seconds as the grid changes
+        if not chargers_control[CONF_CHARGERS_CONTROL] or testing["on"] or protect["busy"]:
+            return
+        now = hass.loop.time()
+        if now - protect["last"] < GRID_PROTECT_SECONDS:
+            return
+        protect["last"] = now
+        protect["busy"] = True
+        entry.async_create_background_task(hass, _protect(), f"{DOMAIN}_grid_protect")
+
+    if grid_max_kw and grid_entity:
+        entry.async_on_unload(async_track_state_change_event(hass, [grid_entity], _grid_changed))
 
     async def _drive_chargers() -> None:
         if not chargers_control[CONF_CHARGERS_CONTROL] or testing["on"]:

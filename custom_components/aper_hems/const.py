@@ -116,6 +116,10 @@ NO_SUN_MINUTES = 10
 # A car that wants no energy this long (SuspendedEV) is full or follows its own schedule: nothing more until it is
 # unplugged. Shorter, it is only waking up after a start
 DONE_AFTER_MINUTES = 5
+# The connection's limit (grid_max_kw): a charge is lowered as soon as the import goes above it (looked at, at most, every
+# few seconds), and raised again only when this margin is left under it (no going up and down)
+GRID_PROTECT_SECONDS = 5
+GRID_RAISE_MARGIN_W = 300
 # The voltage of a phase, to turn the solar surplus into amperes: 400 V between phases, 400 / √3 ≈ 230.9 V to the neutral
 # (a three-phase station takes √3 × 400 V = 692.8 W per ampere)
 PHASE_VOLTS = 400 / 3 ** 0.5
