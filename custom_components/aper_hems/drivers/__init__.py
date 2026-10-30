@@ -7,7 +7,10 @@ driver is not driven.
 
 from __future__ import annotations
 
-from homeassistant.core import HomeAssistant
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
 
 from ..const import (
     CONF_CHARGER_CURRENT_ENTITY,
@@ -21,8 +24,9 @@ class ChargerDriver:
 
     # The statuses (as its status entity gives them, in lower case) in which a charge may be started; empty: any
     START_STATUSES: tuple[str, ...] = ()
-    # The statuses of a charge in progress (started, the car taking energy or not)
+    # The statuses of a charge in progress (started, the car taking energy or not), and of one actually charging
     CHARGING_STATUSES: tuple[str, ...] = ()
+    RUNNING_STATUSES: tuple[str, ...] = ()
     # The statuses of a station without a car: the car was unplugged, a new cycle starts
     UNPLUGGED_STATUSES: tuple[str, ...] = ()
     # The statuses of a car that wants no more energy (full, or its own schedule): nothing more until it is unplugged
@@ -73,6 +77,13 @@ class ChargerDriver:
             return status in self.CHARGING_STATUSES
         return bool(self.switch_on())
 
+    def is_running(self) -> bool:
+        """Whether it charges now (when a start is wanted: nothing to do)."""
+        status = self.status()
+        if self.RUNNING_STATUSES and status is not None:
+            return status in self.RUNNING_STATUSES
+        return bool(self.switch_on())
+
     async def start(self) -> None:
         await self.hass.services.async_call("switch", "turn_on", {"entity_id": self.switch}, blocking=True)
 
@@ -91,6 +102,7 @@ class WallboxDriver(ChargerDriver):
 
     START_STATUSES = ("preparing", "finishing")
     CHARGING_STATUSES = ("charging", "suspendedev", "suspendedevse")
+    RUNNING_STATUSES = ("charging",)
     UNPLUGGED_STATUSES = ("available",)
     DONE_STATUSES = ("suspendedev",)
 

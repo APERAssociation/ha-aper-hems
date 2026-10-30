@@ -11,7 +11,10 @@ from __future__ import annotations
 import asyncio
 import time
 
-from homeassistant.core import HomeAssistant
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
 
 from . import ChargerDriver
 
