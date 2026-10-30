@@ -14,15 +14,17 @@ from datetime import datetime, timedelta
 
 import aiohttp
 
+from homeassistant.components import persistent_notification
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.history import state_changes_during_period
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.core import Event, HomeAssistant, ServiceCall, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
 from homeassistant.util import dt as dt_util
 
 from . import drivers
+from .drivers.check import run_check
 from .const import (
     SOLAR_FORECAST_ATTRIBUTE,
     SOLAR_FORECAST_KEEP_HOURS,
@@ -1092,7 +1094,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
         })
 
     async def _drive_chargers() -> None:
-        if not chargers_control[CONF_CHARGERS_CONTROL]:
+        if not chargers_control[CONF_CHARGERS_CONTROL] or testing["on"]:
             return
         data = planning["data"] or {}
         now = dt_util.utcnow()
@@ -1193,6 +1195,53 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
         if known is None or abs(known - amperes) >= 1:
             if await send(f"{amperes} A", lambda: driver.set_current(amperes), reason, current_a=amperes):
                 state["current"] = amperes
+
+    # The test of a station (action aper_hems.test_charger): the real station driven step by step, the report in a
+    # notification; the control waits meanwhile
+    testing = {"on": False}
+
+    async def _test_charger(call: ServiceCall) -> None:
+        wanted = (call.data.get("charger") or "").strip()
+        configured = entry.options.get(CONF_CHARGERS, [])
+        charger = next((c for c in configured if not wanted or c.get(CONF_NAME) == wanted), None)
+        title = "Test de la borne"
+        if charger is None:
+            names = ", ".join(c.get(CONF_NAME, "") for c in configured) or "aucune"
+            persistent_notification.async_create(hass, f"Borne « {wanted} » introuvable. Bornes du plugin : {names}.", title,
+                                                 f"{DOMAIN}_test_charger")
+            return
+        name = charger.get(CONF_NAME)
+        driver = drivers.driver_for(hass, charger, charger.get(CONF_CHARGER_BRAND))
+        if driver is None:
+            persistent_notification.async_create(hass, f"{name} : pas de pilote pour la marque "
+                                                 f"« {charger.get(CONF_CHARGER_BRAND)} », ou pas d'interrupteur marche/arrêt.",
+                                                 title, f"{DOMAIN}_test_charger")
+            return
+        if testing["on"]:
+            return
+        testing["on"] = True
+        persistent_notification.async_create(hass, f"{name} : test en cours (2 à 6 minutes)…", title, f"{DOMAIN}_test_charger")
+        entry.async_create_background_task(hass, _run_test(charger, name, driver, title), f"{DOMAIN}_test_charger")
+
+    async def _run_test(charger: dict, name: str, driver, title: str) -> None:
+        low = int(charger.get(CONF_CHARGER_MIN_CURRENT, DEFAULT_MIN_CURRENT))
+        high = min(int(charger.get(CONF_CHARGER_MAX_CURRENT, DEFAULT_MAX_CURRENT)), low + 4)
+        phases = 1 if charger.get(CONF_CHARGER_PHASES) == PHASES_MONO else 3
+        try:
+            steps = await run_check(hass, driver, name, low, high, phases,
+                                    lambda: _read_power_w(charger.get(CONF_CHARGER_POWER_ENTITY)))
+        finally:
+            testing["on"] = False
+            # The control starts again from what the planning says now
+            stations.pop(name, None)
+        passed = all(ok is not False for ok, _ in steps)
+        icon = {True: "✅", False: "❌", None: "ℹ️"}
+        message = ("**Tout fonctionne.**" if passed else "**Le test s'est arrêté à l'étape en ❌.**") + "\n\n" + "\n".join(
+            f"{icon[ok]} {text}" for ok, text in steps)
+        persistent_notification.async_create(hass, message, f"{title} : {name}", f"{DOMAIN}_test_charger")
+
+    hass.services.async_register(DOMAIN, "test_charger", _test_charger)
+    entry.async_on_unload(lambda: hass.services.async_remove(DOMAIN, "test_charger"))
 
     async def _planning_tick(_now=None):
         if not planning_entity and not control_entity and not chargers_control[CONF_CHARGERS_CONTROL]:

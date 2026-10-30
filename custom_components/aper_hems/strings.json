@@ -366,5 +366,17 @@
       "soc_range": "The highest level must be above the lowest",
       "planning_entity": "A sensor, for example sensor.aper_hems_planning (lower case letters, digits and _)."
     }
+  },
+  "services": {
+    "test_charger": {
+      "name": "Test the charging station",
+      "description": "Really drives the station step by step (car plugged in, not charging): lowest current, start, a higher current, back to the lowest, stop, and the current put back. The report comes in a notification (2 to 6 minutes).",
+      "fields": {
+        "charger": {
+          "name": "Station",
+          "description": "Name of the station in the plugin (empty: the first one)"
+        }
+      }
+    }
   }
 }

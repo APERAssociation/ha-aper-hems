@@ -366,5 +366,17 @@
       "soc_range": "Le niveau maximal doit être plus haut que le niveau minimal",
       "planning_entity": "Un capteur, par exemple sensor.aper_hems_planning (lettres minuscules, chiffres et _)."
     }
+  },
+  "services": {
+    "test_charger": {
+      "name": "Tester la borne",
+      "description": "Pilote vraiment la borne pas à pas (voiture branchée, pas en charge) : courant minimal, démarrage, courant plus fort, retour au minimum, arrêt, et consigne remise comme avant. Le rapport arrive dans une notification (2 à 6 minutes).",
+      "fields": {
+        "charger": {
+          "name": "Borne",
+          "description": "Nom de la borne dans le plugin (vide : la première)"
+        }
+      }
+    }
   }
 }

@@ -1,0 +1,7 @@
+test_charger:
+  fields:
+    charger:
+      required: false
+      example: "Wallbox Pulsar Plus"
+      selector:
+        text:
