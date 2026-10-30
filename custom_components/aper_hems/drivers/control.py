@@ -19,7 +19,6 @@ from ..const import (
     CONF_CHARGER_MAX_CURRENT,
     CONF_CHARGER_MIN_CURRENT,
     CONF_CHARGER_PHASES,
-    CONF_CHARGER_POWER_ENTITY,
     CONF_NAME,
     CONTROL_MAX_PLANNING_AGE_MINUTES,
     DONE_AFTER_MINUTES,
@@ -42,16 +41,15 @@ def parse_time(value: str | None) -> datetime | None:
 
 
 class ChargerControl:
-    """hass: to drive the stations; chargers: the stations of the options; read_power_w(entity) in W; live_values(): the
+    """hass: to drive the stations; chargers: the stations of the options; live_values(): the
     grid (+ import) and the battery (+ charge) in W; production_w(): the sun now in W; log(charger, command, reason, test,
     **extra): what was sent (or would have been, in test mode); warn(text): a command refused."""
 
-    def __init__(self, hass, chargers: list[dict], read_power_w: Callable, live_values: Callable, production_w: Callable,
+    def __init__(self, hass, chargers: list[dict], live_values: Callable, production_w: Callable,
                  log: Callable, warn: Callable = lambda text: None,
                  driver_factory: Callable[..., ChargerDriver | None] = driver_for) -> None:
         self.hass = hass
         self.chargers = chargers
-        self.read_power_w = read_power_w
         self.live_values = live_values
         self.production_w = production_w
         self.log = log
@@ -156,11 +154,11 @@ class ChargerControl:
         amperes, reason = high, "Pleine puissance"
         if solar_first and quarter.get("carSource") == "solar" and not no_sun:
             # What the car could take without buying: what it takes now, plus what goes to the grid, plus what charges the
-            # battery (the car first in "Solaire d'abord"), minus what the battery gives (it must not feed the car)
+            # battery (the car first in "Solaire d'abord"), minus what the battery gives (it must not feed the car). What it
+            # takes now from its current setting: a power sensor read from the cloud is a minute or two late, and the
+            # current would go up and down
             values = self.live_values()
-            car_w = self.read_power_w(charger.get(CONF_CHARGER_POWER_ENTITY))
-            if car_w is None:
-                car_w = (driver.current_a() or 0) * PHASE_VOLTS * phases if driver.is_charging() else 0
+            car_w = (driver.current_a() or 0) * PHASE_VOLTS * phases if driver.is_running() else 0
             available = car_w - (values.get("grid") or 0) + (values.get("battery") or 0)
             amperes = max(low, min(high, int(available // (PHASE_VOLTS * phases))))
             reason = f"Surplus solaire {round(available)} W"

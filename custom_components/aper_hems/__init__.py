@@ -1087,7 +1087,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
         })
 
     charger_control = ChargerControl(
-        hass, entry.options.get(CONF_CHARGERS, []), _read_power_w, _live_values, lambda: _read_power_w(production_entity),
+        hass, entry.options.get(CONF_CHARGERS, []), _live_values, lambda: _read_power_w(production_entity),
         _charger_log, _LOGGER.warning)
 
     async def _drive_chargers() -> None:

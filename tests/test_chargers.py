@@ -107,7 +107,6 @@ class Harness:
         self.log: list[tuple[str, str]] = []
         self.control = ChargerControl(
             station, [CHARGER],
-            read_power_w=lambda entity: float(station.get(entity).state) if entity and station.get(entity) else None,
             live_values=lambda: {"grid": self.grid, "battery": self.battery},
             production_w=lambda: self.production,
             log=lambda name, command, reason, test, **extra: self.log.append((command, reason)))
@@ -221,13 +220,13 @@ class ControlTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(h.station.sent(), ["start", "stop"])
 
     async def test_solar_first_follows_the_surplus(self):
-        # Charging at 6 A (4140 W), 2000 W exported, the battery charging 1000 W: 7140 W → 10 A
+        # Charging at 6 A (4157 W), 2000 W exported, the battery charging 1000 W: 7157 W → 10 A
         h = Harness(FakeWallbox(status="Charging", current=6), production=9000, grid=-2000, battery=1000)
         await h.tick(planning("charge", source="solar", mode="solar_first"))
         self.assertEqual(h.station.sent(), ["10 A"])
 
     async def test_solar_first_keeps_the_lowest_current_under_clouds(self):
-        # 5520 W taken (8 A), 1500 W bought, the battery giving 500 W: 3520 W → 5 A, kept at 6 A
+        # 5542 W taken (8 A), 1500 W bought, the battery giving 500 W: 3542 W → 5 A, kept at 6 A
         h = Harness(FakeWallbox(status="Charging", current=8), production=3000, grid=1500, battery=-500)
         await h.tick(planning("charge", source="solar", mode="solar_first"))
         self.assertEqual(h.station.sent(), ["6 A"])
@@ -325,6 +324,21 @@ class CheckTests(unittest.IsolatedAsyncioTestCase):
         driver.start = waking_start
         steps = await check.run_check(station, driver, "Wallbox", 6, 10, 3, lambda: station.power())
         self.assertNotIn(False, [ok for ok, _ in steps])
+
+    async def test_a_late_power_sensor_is_said_not_failed(self):
+        station = FakeWallbox(status="Preparing", current=16)
+        driver = WallboxDriver(station, CHARGER)
+        last = {"w": 0.0}
+
+        def late_power():
+            # The cloud sensor: keeps the power of the charge after the stop
+            if station.status == "Charging":
+                last["w"] = station.power()
+            return last["w"]
+
+        steps = await check.run_check(station, driver, "Wallbox", 6, 10, 3, late_power)
+        self.assertNotIn(False, [ok for ok, _ in steps])
+        self.assertIn("en retard", steps[-2][1])
 
     async def test_says_when_the_car_wants_no_energy(self):
         station = FakeWallbox(status="Preparing", car_takes=False)

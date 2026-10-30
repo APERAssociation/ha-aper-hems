@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
+from ..const import PHASE_VOLTS
 from . import ChargerDriver
 
 # How long a step waits for the station to follow, and how often it looks
@@ -95,7 +96,7 @@ async def run_check(hass: HomeAssistant, driver: ChargerDriver, name: str, low: 
                            f"interrupteur {'marche' if driver.switch_on() else 'arrêt'}")
             return steps
         say(True, f"Charge démarrée : statut {driver.status()}")
-        expected_low = low * 230 * phases
+        expected_low = round(low * PHASE_VOLTS * phases)
         if power() is not None:
             if await wait(lambda: (power() or 0) > expected_low * 0.5):
                 say(True, f"Puissance à {low} A : {round(power() or 0)} W (≈ {expected_low} W attendus)")
@@ -112,7 +113,7 @@ async def run_check(hass: HomeAssistant, driver: ChargerDriver, name: str, low: 
         say(True, f"Consigne à {high} A suivie")
         if low_power is not None:
             if await wait(lambda: (power() or 0) > low_power + POWER_RISE_W):
-                say(True, f"Puissance à {high} A : {round(power() or 0)} W (≈ {high * 230 * phases} W attendus)")
+                say(True, f"Puissance à {high} A : {round(power() or 0)} W (≈ {round(high * PHASE_VOLTS * phases)} W attendus)")
             else:
                 say(None, f"Puissance à {high} A : {round(power() or 0)} W, presque comme à {low} A "
                           "(la voiture limite peut-être sa charge)")
@@ -132,8 +133,12 @@ async def run_check(hass: HomeAssistant, driver: ChargerDriver, name: str, low: 
         say(True, f"Charge arrêtée : statut {driver.status()}"
                   + (" (un nouveau démarrage est possible)" if driver.can_start() else ""))
         if power() is not None:
-            if await wait(lambda: (power() or 0) < 300, timeout=60):
+            if await wait(lambda: (power() or 0) < 300):
                 say(True, f"Puissance après l'arrêt : {round(power() or 0)} W")
+            elif not driver.is_charging():
+                # The status says stopped: the power sensor is late (a cloud one is read every minute or two)
+                say(None, f"Le capteur de puissance indique encore {round(power() or 0)} W, mais le statut dit "
+                          f"{driver.status()} : il est en retard (capteur du cloud ?). Préférez celui d'OCPP")
             else:
                 say(False, f"La borne prend encore {round(power() or 0)} W après l'arrêt")
     except Exception as err:  # noqa: BLE001 - a refused command ends the test, said in the report

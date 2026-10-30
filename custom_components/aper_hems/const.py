@@ -116,8 +116,9 @@ NO_SUN_MINUTES = 10
 # A car that wants no energy this long (SuspendedEV) is full or follows its own schedule: nothing more until it is
 # unplugged. Shorter, it is only waking up after a start
 DONE_AFTER_MINUTES = 5
-# The voltage of a phase, to turn the solar surplus into amperes
-PHASE_VOLTS = 230
+# The voltage of a phase, to turn the solar surplus into amperes: 400 V between phases, 400 / √3 ≈ 230.9 V to the neutral
+# (a three-phase station takes √3 × 400 V = 692.8 W per ampere)
+PHASE_VOLTS = 400 / 3 ** 0.5
 
 # The solar batteries of the home: their name, capacity and level (%), sent to the site with the cars (the simulator starts
 # from them)
