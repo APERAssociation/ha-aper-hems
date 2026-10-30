@@ -22,6 +22,7 @@ from ..const import (
     CONF_CHARGER_POWER_ENTITY,
     CONF_NAME,
     CONTROL_MAX_PLANNING_AGE_MINUTES,
+    DONE_AFTER_MINUTES,
     DEFAULT_MAX_CURRENT,
     DEFAULT_MIN_CURRENT,
     NO_SUN_MINUTES,
@@ -83,7 +84,8 @@ class ChargerControl:
                 quarter = q
         if quarter is None:
             return
-        state = self.stations.setdefault(name, {"want": None, "pending_start": False, "current": None, "blocked": False})
+        state = self.stations.setdefault(name, {"want": None, "pending_start": False, "current": None, "blocked": False,
+                                                "done_since": None})
         want = quarter["car"] == "charge"
         status = driver.status()
 
@@ -105,9 +107,15 @@ class ChargerControl:
         if driver.is_unplugged() and state["blocked"]:
             state.update(blocked=False, want=None, pending_start=False)
             self.log(name, "nouveau cycle", "Voiture débranchée", test, status=status)
-        # The car wants no more energy: nothing more until it is unplugged
-        if driver.is_done() and not state["blocked"]:
-            block(f"Statut {status} : la voiture ne demande plus d'énergie, rien jusqu'au débranchement")
+        # The car wants no more energy for a while (not only waking up after a start): nothing more until it is unplugged
+        if driver.is_done():
+            state["done_since"] = state["done_since"] or now
+        else:
+            state["done_since"] = None
+        if (state["done_since"] is not None and now - state["done_since"] >= timedelta(minutes=DONE_AFTER_MINUTES)
+                and not state["blocked"]):
+            block(f"Statut {status} depuis {DONE_AFTER_MINUTES} min : la voiture ne demande plus d'énergie, "
+                  "rien jusqu'au débranchement")
         if state["blocked"]:
             state["want"] = want
             return

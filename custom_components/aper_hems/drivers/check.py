@@ -84,16 +84,17 @@ async def run_check(hass: HomeAssistant, driver: ChargerDriver, name: str, low: 
             return steps
         say(True, f"Consigne à {low} A suivie")
 
-        # 4. Start
+        # 4. Start: the car may go through SuspendedEV / SuspendedEVSE while it wakes up, it must reach Charging
         await driver.start()
-        if not await wait(lambda: driver.is_charging()):
-            say(False, f"Démarrage pas suivi : statut {driver.status()}, interrupteur {'marche' if driver.switch_on() else 'arrêt'}")
+        if not await wait(lambda: driver.is_running()):
+            if driver.is_done():
+                say(False, f"Statut {driver.status()} depuis {STEP_TIMEOUT_SECONDS} s : la voiture ne demande pas d'énergie "
+                           "(pleine, ou son propre horaire) ; le reste du test ne peut pas être vérifié")
+            else:
+                say(False, f"Démarrage pas suivi : statut {driver.status()}, "
+                           f"interrupteur {'marche' if driver.switch_on() else 'arrêt'}")
             return steps
         say(True, f"Charge démarrée : statut {driver.status()}")
-        if driver.is_done():
-            say(False, f"Statut {driver.status()} : la voiture ne demande pas d'énergie (pleine, ou son propre horaire) ; "
-                       "le reste du test ne peut pas être vérifié")
-            return steps
         expected_low = low * 230 * phases
         if power() is not None:
             if await wait(lambda: (power() or 0) > expected_low * 0.5):

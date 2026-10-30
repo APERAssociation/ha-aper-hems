@@ -6,6 +6,7 @@ one (OCPP statuses, switch, current, power) and a fake planning.
 
 from __future__ import annotations
 
+import asyncio
 import sys
 import types
 import unittest
@@ -193,16 +194,31 @@ class ControlTests(unittest.IsolatedAsyncioTestCase):
     async def test_a_car_that_wants_no_more_energy_blocks_until_unplugged(self):
         h = Harness(FakeWallbox(status="Preparing", current=16))
         await h.tick(planning("charge"))
-        # The car full
+        # The car full: SuspendedEV for 5 minutes
         h.station.status = "SuspendedEV"
         await h.tick(planning("charge"), minutes=1)
-        await h.tick(planning("wait"), minutes=2)
-        await h.tick(planning("charge"), minutes=3)
-        self.assertEqual(h.station.sent(), ["start"])
+        self.assertNotIn("attente débranchement", h.commands())
+        await h.tick(planning("charge"), minutes=6)
         self.assertIn("attente débranchement", h.commands())
+        await h.tick(planning("wait"), minutes=7)
+        await h.tick(planning("charge"), minutes=8)
+        self.assertEqual(h.station.sent(), ["start"])
         h.station.status = "Available"
-        await h.tick(planning("charge"), minutes=4)
+        await h.tick(planning("charge"), minutes=9)
         self.assertIn("nouveau cycle", h.commands())
+
+    async def test_a_car_waking_up_after_the_start_is_not_blocked(self):
+        h = Harness(FakeWallbox(status="Preparing", current=16))
+        await h.tick(planning("charge"))
+        # SuspendedEV for two minutes while the car wakes up, then Charging
+        h.station.status = "SuspendedEV"
+        await h.tick(planning("charge"), minutes=1)
+        await h.tick(planning("charge"), minutes=2)
+        h.station.status = "Charging"
+        await h.tick(planning("charge"), minutes=3)
+        await h.tick(planning("wait"), minutes=4)
+        self.assertNotIn("attente débranchement", h.commands())
+        self.assertEqual(h.station.sent(), ["start", "stop"])
 
     async def test_solar_first_follows_the_surplus(self):
         # Charging at 6 A (4140 W), 2000 W exported, the battery charging 1000 W: 7140 W → 10 A
@@ -294,6 +310,21 @@ class CheckTests(unittest.IsolatedAsyncioTestCase):
         steps = await self.run_check(station)
         self.assertFalse(steps[-1][0])
         self.assertEqual(station.sent(), [])
+
+    async def test_a_car_waking_up_through_suspendedev_passes(self):
+        station = FakeWallbox(status="Preparing", current=16)
+        driver = WallboxDriver(station, CHARGER)
+        start = driver.start
+
+        async def waking_start():
+            await start()
+            # SuspendedEV first, Charging a moment later
+            station.status = "SuspendedEV"
+            asyncio.get_running_loop().call_later(0.01, lambda: setattr(station, "status", "Charging"))
+
+        driver.start = waking_start
+        steps = await check.run_check(station, driver, "Wallbox", 6, 10, 3, lambda: station.power())
+        self.assertNotIn(False, [ok for ok, _ in steps])
 
     async def test_says_when_the_car_wants_no_energy(self):
         station = FakeWallbox(status="Preparing", car_takes=False)

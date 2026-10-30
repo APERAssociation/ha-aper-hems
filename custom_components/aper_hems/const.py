@@ -113,6 +113,9 @@ CHARGER_COMMANDS_ENTITY = "sensor.aper_hems_commandes_borne"
 # Without sun (production under this, in W) for this long, a solar charge goes to the highest current
 NO_SUN_W = 50
 NO_SUN_MINUTES = 10
+# A car that wants no energy this long (SuspendedEV) is full or follows its own schedule: nothing more until it is
+# unplugged. Shorter, it is only waking up after a start
+DONE_AFTER_MINUTES = 5
 # The voltage of a phase, to turn the solar surplus into amperes
 PHASE_VOLTS = 230
 
