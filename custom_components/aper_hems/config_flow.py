@@ -36,6 +36,9 @@ from .const import (
     CONF_CONTROL_AUTO,
     CONF_CONTROL_TEST,
     CONTROL_DEFAULTS,
+    CHARGERS_CONTROL_DEFAULTS,
+    CONF_CHARGERS_CONTROL,
+    CONF_CHARGERS_CONTROL_TEST,
     CONF_BATTERIES,
     CONF_BATTERY_CAPACITY,
     CONF_BATTERY_LEVEL_ENTITY,
@@ -174,7 +177,7 @@ class AperHemsOptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input=None):
         return self.async_show_menu(
             step_id="init",
-            menu_options=["grid", "consumers", "chargers", "cars", "batteries", "solar_fields", "planning", "control"],
+            menu_options=["grid", "consumers", "chargers", "cars", "batteries", "solar_fields", "planning", "control", "chargers_control"],
             description_placeholders={
                 "consumers": str(len(self._items(CONF_CONSUMERS))),
                 "chargers": str(len(self._items(CONF_CHARGERS))),
@@ -236,6 +239,21 @@ class AperHemsOptionsFlow(OptionsFlow):
             vol.Required(CONF_CONTROL_TEST, default=current[CONF_CONTROL_TEST]): BooleanSelector(),
         }
         return self.async_show_form(step_id="control", data_schema=vol.Schema(schema))
+
+    # ---------- the control of the charging stations ----------
+
+    async def async_step_chargers_control(self, user_input=None):
+        keys = tuple(CHARGERS_CONTROL_DEFAULTS)
+        if user_input is not None:
+            options = {k: v for k, v in self.config_entry.options.items() if k not in keys}
+            options.update({k: user_input[k] for k in keys if k in user_input})
+            return self.async_create_entry(data=options)
+        current = {**CHARGERS_CONTROL_DEFAULTS, **{k: v for k, v in self.config_entry.options.items() if k in keys}}
+        schema = {
+            vol.Required(CONF_CHARGERS_CONTROL, default=current[CONF_CHARGERS_CONTROL]): BooleanSelector(),
+            vol.Required(CONF_CHARGERS_CONTROL_TEST, default=current[CONF_CHARGERS_CONTROL_TEST]): BooleanSelector(),
+        }
+        return self.async_show_form(step_id="chargers_control", data_schema=vol.Schema(schema))
 
     # ---------- solar batteries ----------
 

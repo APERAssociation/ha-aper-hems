@@ -1,12 +1,16 @@
 {
   "domain": "aper_hems",
   "name": "APER HEMS",
-  "codeowners": ["@marccarrard"],
+  "codeowners": [
+    "@marccarrard"
+  ],
   "config_flow": true,
-  "dependencies": ["recorder"],
+  "dependencies": [
+    "recorder"
+  ],
   "documentation": "https://github.com/APERAssociation/ha-aper-hems",
   "iot_class": "cloud_push",
   "issue_tracker": "https://github.com/APERAssociation/ha-aper-hems/issues",
   "requirements": [],
-  "version": "1.11.0"
+  "version": "1.12.0"
 }

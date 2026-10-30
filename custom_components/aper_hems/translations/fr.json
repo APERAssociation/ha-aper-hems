@@ -92,7 +92,8 @@
           "solar_fields": "Champs solaires (prévision)",
           "batteries": "Batteries solaires",
           "planning": "Planning du HEMS",
-          "control": "Pilotage de la batterie"
+          "control": "Pilotage de la batterie",
+          "chargers_control": "Pilotage des bornes"
         }
       },
       "consumers": {
@@ -349,6 +350,14 @@
           "control_grid_only": "Option pour « Consommer sur le grid » (pas de décharge, le soleil charge seul)",
           "control_auto": "Option pour l'autoconsommation (Charge solaire, Décharge batterie)",
           "control_test": "Mode test (ne commande rien)"
+        }
+      },
+      "chargers_control": {
+        "title": "Pilotage des bornes",
+        "description": "Le plugin pilote la borne sur laquelle le planning du HEMS charge la voiture, avec le pilote de sa marque (pour l'instant Wallbox) : il démarre la charge quand le planning dit « Charger VE » (Wallbox : seulement quand le statut de la borne est Preparing ou Finishing, attendu sinon) et l'arrête sinon, seulement quand le planning change d'avis (un changement à la main tient jusque-là). Chaque minute, l'ampérage : en « Solaire d'abord », sur le surplus solaire jusqu'au courant minimal de la borne ; sinon, ou sans soleil depuis 10 minutes, au maximum. Planning trop ancien (plus de 30 min) : rien n'est changé. En mode test, rien n'est commandé : ce qui l'aurait été est écrit dans sensor.aper_hems_commandes_borne.",
+        "data": {
+          "chargers_control": "Piloter les bornes",
+          "chargers_control_test": "Mode test (ne commande rien)"
         }
       }
     },

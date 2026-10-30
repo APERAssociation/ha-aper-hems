@@ -99,6 +99,23 @@ PILOTE_ACTIONS = {
 # A planning older than this is not followed any more: the battery goes back to self-consumption
 CONTROL_MAX_PLANNING_AGE_MINUTES = 30
 
+# Control of the charging stations (drivers/): the station the planning charges the car on is started when the planning says
+# "charge" and stopped otherwise (only when that changes: a manual change holds until the next one), its current set every
+# minute: in "Solaire d'abord" on the solar surplus (down to its lowest current), at its highest otherwise or without sun.
+# Test mode: nothing is sent, what would be is written into the commands sensor of the stations
+CONF_CHARGERS_CONTROL = "chargers_control"
+CONF_CHARGERS_CONTROL_TEST = "chargers_control_test"
+CHARGERS_CONTROL_DEFAULTS = {
+    CONF_CHARGERS_CONTROL: False,
+    CONF_CHARGERS_CONTROL_TEST: True,
+}
+CHARGER_COMMANDS_ENTITY = "sensor.aper_hems_commandes_borne"
+# Without sun (production under this, in W) for this long, a solar charge goes to the highest current
+NO_SUN_W = 50
+NO_SUN_MINUTES = 10
+# The voltage of a phase, to turn the solar surplus into amperes
+PHASE_VOLTS = 230
+
 # The solar batteries of the home: their name, capacity and level (%), sent to the site with the cars (the simulator starts
 # from them)
 CONF_BATTERIES = "batteries"
