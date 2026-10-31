@@ -491,7 +491,8 @@ class AperHemsOptionsFlow(OptionsFlow):
             SelectSelectorConfig(options=[SelectOptionDict(value=k, label=v) for k, v in CHARGER_BRANDS.items()],
                                  mode=SelectSelectorMode.DROPDOWN))
         switch = EntitySelector(EntitySelectorConfig(domain=["switch", "input_boolean"]))
-        current = EntitySelector(EntitySelectorConfig(domain=["number", "input_number"]))
+        # Easee: its current is read on a sensor (dynamic_charger_limit) and set through its own action
+        current = EntitySelector(EntitySelectorConfig(domain=["number", "input_number", "sensor"]))
         for key, selector in ((CONF_CHARGER_SWITCH_ENTITY, switch), (CONF_CHARGER_CURRENT_ENTITY, current)):
             if d.get(key):
                 schema[vol.Required(key, default=d[key])] = selector

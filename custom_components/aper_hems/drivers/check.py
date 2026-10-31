@@ -47,16 +47,20 @@ async def run_check(hass: HomeAssistant, driver: ChargerDriver, name: str, low: 
         return power_w()
 
     # 1. The entities
-    missing = [label for label, entity in (("interrupteur marche/arrêt", driver.switch), ("consigne d'ampérage", driver.current),
-                                           ("statut", driver.status_entity)) if not entity]
+    required = driver.required_entities()
+    missing = [label for label, entity in required if not entity]
     if missing:
         say(False, "Entités manquantes dans le plugin : " + ", ".join(missing))
         return steps
-    say(True, f"Entités : interrupteur {driver.switch}, consigne {driver.current}, statut {driver.status_entity}")
+    say(True, "Entités : " + ", ".join(f"{label} {entity}" for label, entity in required))
     if power() is None:
         say(None, "Pas de capteur de puissance : la puissance ne sera pas vérifiée")
     before = driver.current_a()
-    say(None, f"Statut {driver.status()}, interrupteur {'marche' if driver.switch_on() else 'arrêt'}, consigne {before} A")
+
+    def switch_text() -> str:
+        return f", interrupteur {'marche' if driver.switch_on() else 'arrêt'}" if driver.switch else ""
+
+    say(None, f"Statut {driver.status()}{switch_text()}, consigne {before} A")
 
     # 2. A status that allows a start
     if driver.is_charging():
@@ -70,7 +74,7 @@ async def run_check(hass: HomeAssistant, driver: ChargerDriver, name: str, low: 
 
     async def stop_and_restore() -> None:
         try:
-            if driver.is_charging() or driver.switch_on():
+            if driver.is_charging() or (driver.NEEDS_SWITCH and driver.switch_on()):
                 await driver.stop()
             if before is not None:
                 await driver.set_current(int(before))
@@ -92,8 +96,7 @@ async def run_check(hass: HomeAssistant, driver: ChargerDriver, name: str, low: 
                 say(False, f"Statut {driver.status()} depuis {STEP_TIMEOUT_SECONDS} s : la voiture ne demande pas d'énergie "
                            "(pleine, ou son propre horaire) ; le reste du test ne peut pas être vérifié")
             else:
-                say(False, f"Démarrage pas suivi : statut {driver.status()}, "
-                           f"interrupteur {'marche' if driver.switch_on() else 'arrêt'}")
+                say(False, f"Démarrage pas suivi : statut {driver.status()}{switch_text()}")
             return steps
         say(True, f"Charge démarrée : statut {driver.status()}")
         expected_low = round(low * PHASE_VOLTS * phases)

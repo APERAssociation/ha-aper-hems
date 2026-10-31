@@ -31,6 +31,7 @@ from ..const import (
     NO_SUN_W,
     PHASE_VOLTS,
     PHASES_MONO,
+    PHASES_SWITCHABLE,
     PHASES_TRI,
 )
 from . import ChargerDriver, driver_for
@@ -89,7 +90,7 @@ class ChargerControl:
         if quarter is None:
             return None
         state = self.stations.setdefault(name, {"want": None, "pending_start": False, "current": None, "blocked": False,
-                                                "done_since": None, "manual": None})
+                                                "done_since": None, "manual": None, "phases": None})
         kind = charger.get(CONF_CHARGER_PHASES)
         # Its phases: three for a three-phase station (6 A = 4.2 kW), one for a single-phase one, as planned for a switchable one
         phases = 3 if kind == PHASES_TRI else 1 if kind == PHASES_MONO else int(quarter.get("carPhases") or 3)
@@ -186,6 +187,18 @@ class ChargerControl:
                 state["manual"] = None
             if not want and driver.is_charging():
                 await send("stop", driver.stop, quarter.get("carLabel") or "Pas de recharge prévue")
+        # A station that switches between one and three phases: the phases the planning wants, set before a start and when
+        # they change; a charge in progress is paused to take them, and started again at the next minute
+        if (want and driver.SWITCHES_PHASES and charger.get(CONF_CHARGER_PHASES) == PHASES_SWITCHABLE
+                and state["phases"] != phases):
+            words = "monophasé" if phases == 1 else "triphasé"
+            if await send(f"{phases} phase" + ("s" if phases > 1 else ""), lambda: driver.set_phases(phases),
+                          f"Planning en {words}", phases=phases):
+                state["phases"] = phases
+                if driver.is_running():
+                    if await send("stop", driver.stop, f"Passage en {words} : pause, reprise à la minute suivante"):
+                        state["pending_start"] = True
+                    return
         if state["pending_start"]:
             if driver.is_running():
                 state["pending_start"] = False

@@ -161,8 +161,8 @@
         "data_description": {
           "name": "Nom affiché, par exemple « Garage »",
           "brand": "Pour lire son statut avec les mots de la marque et, plus tard, la piloter de la bonne manière (Autre : lecture générale)",
-          "switch_entity": "Interrupteur qui démarre et arrête la charge",
-          "current_entity": "Nombre réglable donnant le courant de charge en ampères",
+          "switch_entity": "Interrupteur qui démarre et arrête la charge (Easee : son interrupteur « Activé », is_enabled ; la charge est mise en pause et reprise par l'intégration Easee)",
+          "current_entity": "Nombre réglable donnant le courant de charge en ampères (Easee : le capteur dynamic_charger_limit, à activer dans l'intégration Easee)",
           "phases": "Mono/Tri : la borne passe de l'un à l'autre ; Mono : une phase ; Triphasé : trois phases",
           "min_current": "Le plus petit courant de charge que la borne accepte (6 A en général)",
           "max_current": "Le plus grand courant de charge permis par l'installation",
@@ -188,8 +188,8 @@
         "data_description": {
           "name": "Nom affiché, par exemple « Garage »",
           "brand": "Pour lire son statut avec les mots de la marque et, plus tard, la piloter de la bonne manière (Autre : lecture générale)",
-          "switch_entity": "Interrupteur qui démarre et arrête la charge",
-          "current_entity": "Nombre réglable donnant le courant de charge en ampères",
+          "switch_entity": "Interrupteur qui démarre et arrête la charge (Easee : son interrupteur « Activé », is_enabled ; la charge est mise en pause et reprise par l'intégration Easee)",
+          "current_entity": "Nombre réglable donnant le courant de charge en ampères (Easee : le capteur dynamic_charger_limit, à activer dans l'intégration Easee)",
           "phases": "Mono/Tri : la borne passe de l'un à l'autre ; Mono : une phase ; Triphasé : trois phases",
           "min_current": "Le plus petit courant de charge que la borne accepte (6 A en général)",
           "max_current": "Le plus grand courant de charge permis par l'installation",

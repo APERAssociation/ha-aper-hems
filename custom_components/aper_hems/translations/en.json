@@ -161,8 +161,8 @@
         "data_description": {
           "name": "Displayed name, for example \"Garage\"",
           "brand": "To read its status with the words of the brand and, later, control it the right way (Autre: general reading)",
-          "switch_entity": "Switch that starts and stops the charge",
-          "current_entity": "Adjustable number giving the charging current in amperes",
+          "switch_entity": "Switch that starts and stops the charge (Easee: its \"enabled\" switch, is_enabled; the charge is paused and resumed through the Easee integration)",
+          "current_entity": "Adjustable number giving the charging current in amperes (Easee: the sensor dynamic_charger_limit, to enable in the Easee integration)",
           "phases": "Mono/Tri: the station switches between them; Mono: one phase; Triphasé: three phases",
           "min_current": "The lowest charging current the station accepts (usually 6 A)",
           "max_current": "The highest charging current the installation allows",
@@ -188,8 +188,8 @@
         "data_description": {
           "name": "Displayed name, for example \"Garage\"",
           "brand": "To read its status with the words of the brand and, later, control it the right way (Autre: general reading)",
-          "switch_entity": "Switch that starts and stops the charge",
-          "current_entity": "Adjustable number giving the charging current in amperes",
+          "switch_entity": "Switch that starts and stops the charge (Easee: its \"enabled\" switch, is_enabled; the charge is paused and resumed through the Easee integration)",
+          "current_entity": "Adjustable number giving the charging current in amperes (Easee: the sensor dynamic_charger_limit, to enable in the Easee integration)",
           "phases": "Mono/Tri: the station switches between them; Mono: one phase; Triphasé: three phases",
           "min_current": "The lowest charging current the station accepts (usually 6 A)",
           "max_current": "The highest charging current the installation allows",
