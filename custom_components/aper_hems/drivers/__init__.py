@@ -69,8 +69,10 @@ class ChargerDriver:
             return None
 
     def can_start(self) -> bool:
-        """Whether a charge may be started now (the car plugged in, no charge in progress)."""
-        return not self.START_STATUSES or self.status() in self.START_STATUSES
+        """Whether a charge may be started now (the car plugged in, no charge in progress). A status unknown (its entity
+        unavailable, the cloud of the station down): tried all the same, never blocked until a unplug it could not see."""
+        status = self.status()
+        return not self.START_STATUSES or status is None or status in self.START_STATUSES
 
     def is_unplugged(self) -> bool:
         return self.status() in self.UNPLUGGED_STATUSES

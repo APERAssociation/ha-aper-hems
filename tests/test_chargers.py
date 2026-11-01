@@ -293,6 +293,13 @@ class ControlTests(unittest.IsolatedAsyncioTestCase):
         await h.tick(planning("charge"), minutes=9)
         self.assertIn("nouveau cycle", h.commands())
 
+    async def test_a_status_unknown_does_not_block(self):
+        # Its status entity unavailable: the start tried all the same
+        h = Harness(FakeWallbox(status="unavailable", current=16))
+        await h.tick(planning("charge"))
+        self.assertEqual(h.station.sent(), ["start"])
+        self.assertNotIn("attente débranchement", h.commands())
+
     async def test_starts_again_after_a_pause_of_the_planning(self):
         # Stopped for a quarter of an hour by the planning: the Wallbox paused (SuspendedEVSE), started again after it
         h = Harness(FakeWallbox(status="Preparing", current=16))
