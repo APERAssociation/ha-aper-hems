@@ -109,10 +109,11 @@ class ChargerDriver:
 
 class WallboxDriver(ChargerDriver):
     """Wallbox (Pulsar Plus…) driven through OCPP: a charge may be started only when the connector is Preparing (the car
-    plugged in, no transaction) or Finishing (the last transaction ended, the car still plugged in). In any other status, or
+    plugged in, no transaction), Finishing (the last transaction ended, the car still plugged in) or SuspendedEVSE (paused by
+    the station: its switch turned off, by the planning that stopped it a quarter of an hour before). In any other status, or
     once the car wants no more energy (SuspendedEV), nothing more is tried until the car is unplugged (Available)."""
 
-    START_STATUSES = ("preparing", "finishing")
+    START_STATUSES = ("preparing", "finishing", "suspendedevse")
     CHARGING_STATUSES = ("charging", "suspendedev", "suspendedevse")
     RUNNING_STATUSES = ("charging",)
     UNPLUGGED_STATUSES = ("available",)

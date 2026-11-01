@@ -1035,6 +1035,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
     }
     control_state = {"last": None}
 
+    def _batteries_full() -> bool:
+        levels = [(_read_number(battery.get(CONF_BATTERY_LEVEL_ENTITY)), battery.get("max_soc", BATTERY_DEFAULTS["max_soc"]))
+                  for battery in entry.options.get(CONF_BATTERIES, [])]
+        known = [(soc, top) for soc, top in levels if soc is not None]
+        return bool(known) and all(soc >= top - 0.5 for soc, top in known)
+
     async def _control() -> None:
         if not control_entity:
             return
@@ -1050,6 +1056,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
                 start = dt_util.parse_datetime(quarter["start"])
                 if start is not None and start <= now < start + timedelta(minutes=15):
                     source, reason = quarter["source"], quarter.get("sourceLabel")
+        # The batteries full (live level at their highest): no charge from the grid, whatever the planning says (it is read
+        # again within 5 minutes, from this level)
+        if source == "charge_grid" and _batteries_full():
+            source, reason = "solar", "Batterie pleine"
         option = control_options.get(source)
         if not option or option == control_state["last"]:
             return

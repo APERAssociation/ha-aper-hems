@@ -65,7 +65,7 @@ class FakeWallbox:
             raise RuntimeError("refusé")
         if (domain, service) == ("switch", "turn_on"):
             self.switch = "on"
-            if self.status in ("Preparing", "Finishing"):
+            if self.status in ("Preparing", "Finishing", "SuspendedEVSE"):
                 self.status = "Charging" if self.car_takes else "SuspendedEV"
         elif (domain, service) == ("switch", "turn_off"):
             self.switch = "off"
@@ -196,9 +196,9 @@ class Harness:
 
 
 class DriverTests(unittest.TestCase):
-    def test_wallbox_starts_only_when_preparing_or_finishing(self):
+    def test_wallbox_starts_only_when_preparing_finishing_or_paused(self):
         for status, allowed in (("Preparing", True), ("Finishing", True), ("Available", False), ("Charging", False),
-                                ("SuspendedEV", False), ("SuspendedEVSE", False), ("Faulted", False)):
+                                ("SuspendedEV", False), ("SuspendedEVSE", True), ("Faulted", False)):
             driver = WallboxDriver(FakeWallbox(status=status), CHARGER)
             self.assertEqual(driver.can_start(), allowed, status)
 
@@ -261,7 +261,7 @@ class ControlTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(h.station.sent(), ["16 A", "start"])
 
     async def test_another_status_blocks_until_unplugged(self):
-        h = Harness(FakeWallbox(status="SuspendedEVSE"))
+        h = Harness(FakeWallbox(status="Faulted"))
         await h.tick(planning("charge"))
         self.assertEqual(h.station.sent(), [])
         self.assertIn("attente débranchement", h.commands())
@@ -292,6 +292,16 @@ class ControlTests(unittest.IsolatedAsyncioTestCase):
         h.station.status = "Available"
         await h.tick(planning("charge"), minutes=9)
         self.assertIn("nouveau cycle", h.commands())
+
+    async def test_starts_again_after_a_pause_of_the_planning(self):
+        # Stopped for a quarter of an hour by the planning: the Wallbox paused (SuspendedEVSE), started again after it
+        h = Harness(FakeWallbox(status="Preparing", current=16))
+        await h.tick(planning("charge"))
+        await h.tick(planning("none"), minutes=1)
+        h.station.status = "SuspendedEVSE"
+        await h.tick(planning("charge"), minutes=2)
+        self.assertEqual(h.station.sent(), ["start", "stop", "start"])
+        self.assertNotIn("attente débranchement", h.commands())
 
     async def test_a_car_waking_up_after_the_start_is_not_blocked(self):
         h = Harness(FakeWallbox(status="Preparing", current=16))
