@@ -142,6 +142,8 @@ class ChargerControl:
                 await action()
             except Exception as err:  # noqa: BLE001 - a missing entity or a refused command must not stop the plugin
                 self.warn(f"Borne {name} : {command} refusé : {err}")
+                # In the commands sensor too: the member sees why nothing happens
+                self.log(name, f"{command} refusé", str(err) or type(err).__name__, test, status=driver.status(), **extra)
                 return False
         self.log(name, command, reason, test, status=driver.status(), **extra)
         return True

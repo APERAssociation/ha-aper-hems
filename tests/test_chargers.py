@@ -387,6 +387,8 @@ class ControlTests(unittest.IsolatedAsyncioTestCase):
         station = FakeWallbox(status="Preparing", refuse=True)
         h = Harness(station)
         await h.tick(planning("charge"))
+        # Shown in the commands sensor, with why
+        self.assertIn(("start refusé", "refusé"), h.log)
         station.refuse = False
         await h.tick(planning("charge"), minutes=1)
         self.assertEqual(station.sent(), ["start", "start"])
