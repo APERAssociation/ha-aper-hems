@@ -33,6 +33,8 @@ from ..const import (
     PHASES_MONO,
     PHASES_SWITCHABLE,
     PHASES_TRI,
+    SUN_START_MINUTES,
+    SUN_STOP_MINUTES,
 )
 from . import ChargerDriver, driver_for
 
@@ -90,7 +92,8 @@ class ChargerControl:
         if quarter is None:
             return None
         state = self.stations.setdefault(name, {"want": None, "pending_start": False, "current": None, "blocked": False,
-                                                "done_since": None, "manual": None, "phases": None})
+                                                "done_since": None, "manual": None, "phases": None, "sun": False, "sun_since": None,
+                                                "sun_low_since": None})
         kind = charger.get(CONF_CHARGER_PHASES)
         # Its phases: three for a three-phase station (6 A = 4.2 kW), one for a single-phase one, as planned for a switchable one
         phases = 3 if kind == PHASES_TRI else 1 if kind == PHASES_MONO else int(quarter.get("carPhases") or 3)
@@ -150,7 +153,13 @@ class ChargerControl:
         if found is None:
             return
         name, charger, driver, quarter, state, phases = found
-        want = quarter["car"] == "charge"
+        planned = quarter["car"] == "charge"
+        # A solar surplus the planning did not plan, where it allows the sun: charged too, on one phase if it switches
+        was_sun = state["sun"]
+        sun = self._sun(data, quarter, charger, driver, state, phases, now, planned)
+        want = planned or sun
+        if sun and not planned:
+            phases = self._sun_phases(charger, driver)
         status = driver.status()
 
         async def send(command: str, action, reason: str, **extra) -> bool:
@@ -186,7 +195,9 @@ class ChargerControl:
             if want:
                 state["manual"] = None
             if not want and driver.is_charging():
-                await send("stop", driver.stop, quarter.get("carLabel") or "Pas de recharge prévue")
+                reason = (f"Surplus solaire sous le courant minimal depuis {SUN_STOP_MINUTES} min" if was_sun
+                          else quarter.get("carLabel") or "Pas de recharge prévue")
+                await send("stop", driver.stop, reason)
         # A station that switches between one and three phases: the phases the planning wants, set before a start and when
         # they change; a charge in progress is paused to take them, and started again at the next minute
         if (want and driver.SWITCHES_PHASES and charger.get(CONF_CHARGER_PHASES) == PHASES_SWITCHABLE
@@ -207,7 +218,7 @@ class ChargerControl:
             elif driver.can_start():
                 # Its current first: a station starts at the current it had, the whole surplus (or more) bought for a minute
                 await self._set_current(data, quarter, driver, state, phases, low, high, now, test, send)
-                if await send("start", driver.start, "Charger VE"):
+                if await send("start", driver.start, "Charger VE" if planned else "Surplus solaire imprévu"):
                     state["pending_start"] = False
                     # The grid does not show the car yet: its current looked at again at the next minute
                     return
@@ -232,6 +243,43 @@ class ChargerControl:
             return
         await self._set_current(data, quarter, driver, state, phases, low, high, now, test, send)
 
+    @staticmethod
+    def _sun_phases(charger: dict, driver: ChargerDriver) -> int:
+        """The phases of a charge on an unplanned surplus: one for a single-phase station, or one that switches (the surplus
+        is small), three otherwise."""
+        kind = charger.get(CONF_CHARGER_PHASES)
+        return 1 if kind == PHASES_MONO or (kind == PHASES_SWITCHABLE and driver.SWITCHES_PHASES) else 3
+
+    def _sun(self, data: dict, quarter: dict, charger: dict, driver: ChargerDriver, state: dict, phases: int, now: datetime,
+             planned: bool) -> bool:
+        """"Solaire d'abord", where the planning allows the sun (solarAllowed): a charge on the solar surplus it did not plan.
+        Started once the surplus has reached the lowest current for SUN_START_MINUTES (at once when the planned charge on the
+        sun goes on into a quarter planned without it), stopped once it has been under it for SUN_STOP_MINUTES."""
+        if planned or data.get("carMode") != "solar_first" or not quarter.get("solarAllowed"):
+            state.update(sun=False, sun_since=None, sun_low_since=None)
+            return False
+        low = int(charger.get(CONF_CHARGER_MIN_CURRENT, DEFAULT_MIN_CURRENT))
+        sun_phases = self._sun_phases(charger, driver)
+        values = self.live_values()
+        running = driver.is_running()
+        # What the car could take: what it takes now (from its setting, on the phases it charges on), what goes to the grid,
+        # what charges the battery, minus what the battery gives
+        car_w = (driver.current_a() or 0) * PHASE_VOLTS * (state["phases"] or phases) if running else 0
+        available = car_w - (values.get("grid") or 0) + (values.get("battery") or 0)
+        if available >= low * PHASE_VOLTS * sun_phases:
+            state["sun_low_since"] = None
+            state["sun_since"] = state.get("sun_since") or now
+            if not state["sun"] and ((running and state["want"])
+                                     or now - state["sun_since"] >= timedelta(minutes=SUN_START_MINUTES)):
+                state["sun"] = True
+        else:
+            state["sun_since"] = None
+            if state["sun"]:
+                state["sun_low_since"] = state.get("sun_low_since") or now
+                if now - state["sun_low_since"] >= timedelta(minutes=SUN_STOP_MINUTES):
+                    state["sun"] = False
+        return state["sun"]
+
     async def _set_current(self, data: dict, quarter: dict, driver: ChargerDriver, state: dict, phases: int, low: int, high: int,
                            now: datetime, test: bool, send) -> None:
         """The current: on the solar surplus in "Solaire d'abord" (quarters planned on the sun), at the highest otherwise; never
@@ -244,7 +292,7 @@ class ChargerControl:
         no_sun = self.no_sun_since is not None and now - self.no_sun_since >= timedelta(minutes=NO_SUN_MINUTES)
         solar_first = data.get("carMode") == "solar_first"
         amperes, reason = high, "Pleine puissance"
-        if solar_first and quarter.get("carSource") == "solar" and not no_sun:
+        if solar_first and (quarter.get("carSource") == "solar" or state["sun"]) and not no_sun:
             # What the car could take without buying: what it takes now, plus what goes to the grid, plus what charges the
             # battery (the car first in "Solaire d'abord"), minus what the battery gives (it must not feed the car). What it
             # takes now from its current setting: a power sensor read from the cloud is a minute or two late, and the

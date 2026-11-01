@@ -113,6 +113,11 @@ CHARGER_COMMANDS_ENTITY = "sensor.aper_hems_commandes_borne"
 # Without sun (production under this, in W) for this long, a solar charge goes to the highest current
 NO_SUN_W = 50
 NO_SUN_MINUTES = 10
+# "Solaire d'abord", where the planning allows the sun (solarAllowed: plugged in, in its ranges, not full): a solar surplus
+# reaching the lowest current this long starts a charge the planning did not plan, kept while the surplus lasts and stopped
+# once it has been under the lowest current this long (no stopping at each cloud)
+SUN_START_MINUTES = 3
+SUN_STOP_MINUTES = 5
 # A car that wants no energy this long (SuspendedEV) is full or follows its own schedule: nothing more until it is
 # unplugged. Shorter, it is only waking up after a start
 DONE_AFTER_MINUTES = 5
