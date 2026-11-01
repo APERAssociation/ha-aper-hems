@@ -747,6 +747,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
         unit = (hass.states.get(entity_id).attributes.get("unit_of_measurement") or "").lower().strip()
         return value * 1000 if unit == "kw" else value
 
+    def _charger_stopped(power_eid: str) -> bool:
+        """Whether the station of this power sensor (the one that has it as its power, or the only one) says, by its status,
+        that it does not charge; False when unknown."""
+        chargers = entry.options.get(CONF_CHARGERS, [])
+        charger = next((c for c in chargers if c.get(CONF_CHARGER_POWER_ENTITY) == power_eid), None)
+        if charger is None and len(chargers) == 1:
+            charger = chargers[0]
+        driver = drivers.driver_for(hass, charger, charger.get(CONF_CHARGER_BRAND)) if charger else None
+        # Paused (SuspendedEVSE after a stop), waiting for the car (SuspendedEV), finished: it takes nothing
+        if driver is None or not driver.RUNNING_STATUSES or driver.status() is None:
+            return False
+        return not driver.is_running()
+
     def _live_values() -> dict:
         """Instantaneous values, in W: grid positive = import, battery positive = charge."""
         grid = _read_power_w(grid_entity)
@@ -765,6 +778,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
             power_w = _read_power_w(power_eid)
             if power_w is None:
                 continue
+            # A station whose status says it no longer charges: 0 W at once (its power sensor, from the cloud or the meter
+            # values of OCPP, is a minute or so late)
+            if consumer.get("category") == "ev_charger" and _charger_stopped(power_eid):
+                power_w = 0
             for sub_eid in consumer.get(CONF_SUBTRACT_ENTITIES, []):
                 sub_w = _read_power_w(sub_eid)
                 if sub_w is not None:
