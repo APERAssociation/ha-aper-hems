@@ -31,6 +31,7 @@ from ..const import (
     PHASES_MONO,
     PHASES_SWITCHABLE,
     PHASES_TRI,
+    SUN_PHASE_DOWN_MINUTES,
     SUN_PHASE_MARGIN_W,
     SUN_START_MINUTES,
     SUN_STOP_MINUTES,
@@ -273,7 +274,9 @@ class ChargerControl:
             state["sun_phases_since"] = None
         else:
             state["sun_phases_since"] = state.get("sun_phases_since") or now
-            if now - state["sun_phases_since"] >= timedelta(minutes=SUN_STOP_MINUTES):
+            # Down to one phase soon (three phases at their lowest current buy from the grid), up to three only after a while
+            wait = SUN_PHASE_DOWN_MINUTES if target == 1 else SUN_STOP_MINUTES
+            if now - state["sun_phases_since"] >= timedelta(minutes=wait):
                 state.update(sun_phases=target, sun_phases_since=None)
         return state["sun_phases"]
 

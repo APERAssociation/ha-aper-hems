@@ -486,6 +486,22 @@ class UnplannedSunTests(unittest.IsolatedAsyncioTestCase):
             await h.tick(self.waiting(), minutes=minute)
         self.assertEqual(h.station.sent(), ["3_phase", "8 A", "resume"])
 
+    async def test_from_three_phases_to_one_soon_when_three_buy_from_the_grid(self):
+        # Three phases at 6 A (4157 W) on the sun, a cloud: 2000 W bought, 2157 W of sun, enough for one phase only
+        h = Harness(FakeEasee(status="awaiting_start", current=0), production=7000, grid=-6000, charger={**EASEE, "phases": "mono_tri"})
+        for minute in range(4):
+            await h.tick(self.waiting(), minutes=minute)
+        self.assertEqual(h.station.phase_mode, "3_phase")
+        h.station.calls.clear()
+        h.station.current, h.grid = 6, 2000
+        await h.tick(self.waiting(), minutes=4)
+        self.assertEqual(h.station.phase_mode, "3_phase")
+        await h.tick(self.waiting(), minutes=5)
+        self.assertEqual(h.station.sent()[:2], ["1_phase", "pause"])
+        await h.tick(self.waiting(), minutes=6)
+        self.assertEqual(h.station.phase_mode, "1_phase")
+        self.assertIn("resume", h.station.sent())
+
     async def test_from_one_phase_to_three_once_the_sun_has_grown_for_a_while(self):
         h = Harness(FakeEasee(status="awaiting_start", current=0), production=3000, grid=-2000, charger={**EASEE, "phases": "mono_tri"})
         for minute in range(4):

@@ -116,8 +116,10 @@ CHARGER_COMMANDS_ENTITY = "sensor.aper_hems_commandes_borne"
 SUN_START_MINUTES = 3
 SUN_STOP_MINUTES = 5
 # A station that switches, on such a surplus: three phases once it reaches the lowest three-phase current with this margin, one
-# when it falls under it by this margin, each change held SUN_STOP_MINUTES first (it pauses and starts the charge again)
+# when it falls under it by this margin; up to three held SUN_STOP_MINUTES first (each change pauses and starts the charge again),
+# down to one after SUN_PHASE_DOWN_MINUTES (three phases at their lowest current buy from the grid meanwhile)
 SUN_PHASE_MARGIN_W = 300
+SUN_PHASE_DOWN_MINUTES = 1
 # A car that wants no energy this long (SuspendedEV) is full or follows its own schedule: nothing more until it is
 # unplugged. Shorter, it is only waking up after a start
 DONE_AFTER_MINUTES = 5
