@@ -357,7 +357,8 @@
         "description": "The plugin drives the station the HEMS planning charges the car on, with the driver of its brand (Wallbox for now): it starts the charge when the planning says so (Wallbox: only when the status of the station is Preparing or Finishing, waited for otherwise) and stops it otherwise, only when the planning changes its mind (a manual change holds until then). Every minute, the current: in \"Solaire d'abord\", on the solar surplus down to the lowest current of the station; otherwise, or without sun for 10 minutes, at the highest. Planning too old (over 30 min): nothing is changed. In test mode nothing is sent: what would be is written into sensor.aper_hems_commandes_borne.",
         "data": {
           "chargers_control": "Drive the charging stations",
-          "chargers_control_test": "Test mode (sends nothing)"
+          "chargers_control_test": "Test mode (sends nothing)",
+          "chargers_notify": "Notifications in Home Assistant (starts, stops, refusals)"
         }
       }
     },

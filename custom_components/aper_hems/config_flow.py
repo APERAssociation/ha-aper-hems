@@ -39,6 +39,7 @@ from .const import (
     CHARGERS_CONTROL_DEFAULTS,
     CONF_CHARGERS_CONTROL,
     CONF_CHARGERS_CONTROL_TEST,
+    CONF_CHARGERS_NOTIFY,
     CONF_BATTERIES,
     CONF_BATTERY_CAPACITY,
     CONF_BATTERY_LEVEL_ENTITY,
@@ -252,6 +253,7 @@ class AperHemsOptionsFlow(OptionsFlow):
         schema = {
             vol.Required(CONF_CHARGERS_CONTROL, default=current[CONF_CHARGERS_CONTROL]): BooleanSelector(),
             vol.Required(CONF_CHARGERS_CONTROL_TEST, default=current[CONF_CHARGERS_CONTROL_TEST]): BooleanSelector(),
+            vol.Required(CONF_CHARGERS_NOTIFY, default=current[CONF_CHARGERS_NOTIFY]): BooleanSelector(),
         }
         return self.async_show_form(step_id="chargers_control", data_schema=vol.Schema(schema))
 

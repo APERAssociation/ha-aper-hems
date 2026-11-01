@@ -105,9 +105,12 @@ CONTROL_MAX_PLANNING_AGE_MINUTES = 30
 # Test mode: nothing is sent, what would be is written into the commands sensor of the stations
 CONF_CHARGERS_CONTROL = "chargers_control"
 CONF_CHARGERS_CONTROL_TEST = "chargers_control_test"
+# A notification in Home Assistant for each start, stop, phases, refusal or block of a station (not its current, every minute)
+CONF_CHARGERS_NOTIFY = "chargers_notify"
 CHARGERS_CONTROL_DEFAULTS = {
     CONF_CHARGERS_CONTROL: False,
     CONF_CHARGERS_CONTROL_TEST: True,
+    CONF_CHARGERS_NOTIFY: True,
 }
 CHARGER_COMMANDS_ENTITY = "sensor.aper_hems_commandes_borne"
 # "Solaire d'abord" or "Plein au bon prix", plugged in, no grid charge planned: a surplus seen live (export, battery charge)
@@ -123,6 +126,10 @@ SUN_PHASE_DOWN_MINUTES = 1
 # A car that wants no energy this long (SuspendedEV) is full or follows its own schedule: nothing more until it is
 # unplugged. Shorter, it is only waking up after a start
 DONE_AFTER_MINUTES = 5
+# A start the station did not follow (the command went through, the charge did not start: its connection to Home Assistant
+# coming back, a remote start rejected): tried again after this long, this many times at most, then nothing until unplugged
+START_CHECK_MINUTES = 2
+START_TRIES = 5
 # The connection's limit (grid_max_kw): a charge is lowered as soon as the import goes above it (looked at, at most, every
 # few seconds), and raised again only when this margin is left under it (no going up and down)
 GRID_PROTECT_SECONDS = 5

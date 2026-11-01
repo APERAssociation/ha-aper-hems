@@ -51,6 +51,7 @@ from .const import (
     CHARGERS_CONTROL_DEFAULTS,
     CONF_CHARGERS_CONTROL,
     CONF_CHARGERS_CONTROL_TEST,
+    CONF_CHARGERS_NOTIFY,
     GRID_PROTECT_SECONDS,
     DEFAULT_MAX_CURRENT,
     DEFAULT_MIN_CURRENT,
@@ -1097,6 +1098,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
             "sent_at": dt_util.as_local(dt_util.utcnow()).isoformat(),
             **extra,
         })
+        # A notification for what matters to follow it (not the current, set every minute): one per event, kept
+        if chargers_control.get(CONF_CHARGERS_NOTIFY) and not command.endswith(" A"):
+            at = dt_util.as_local(dt_util.utcnow())
+            status = extra.get("status")
+            message = f"{at:%H:%M:%S} · {command}{' (test)' if test else ''}\n\n{reason}"
+            if status:
+                message += f"\n\nStatut de la borne : {status}"
+            persistent_notification.async_create(hass, message, f"APER HEMS · {name}", f"{DOMAIN}_charger_{at:%Y%m%d%H%M%S%f}")
 
     grid_max_kw = entry.options.get(CONF_GRID_MAX_KW)
     charger_control = ChargerControl(

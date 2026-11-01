@@ -31,6 +31,8 @@ from ..const import (
     PHASES_MONO,
     PHASES_SWITCHABLE,
     PHASES_TRI,
+    START_CHECK_MINUTES,
+    START_TRIES,
     SUN_PHASE_DOWN_MINUTES,
     SUN_PHASE_MARGIN_W,
     SUN_START_MINUTES,
@@ -92,7 +94,8 @@ class ChargerControl:
             return None
         state = self.stations.setdefault(name, {"want": None, "pending_start": False, "current": None, "blocked": False,
                                                 "done_since": None, "manual": None, "phases": None, "sun": False, "sun_since": None,
-                                                "sun_low_since": None, "sun_phases": None, "sun_phases_since": None})
+                                                "sun_low_since": None, "sun_phases": None, "sun_phases_since": None,
+                                                "started_at": None, "start_tries": 0})
         kind = charger.get(CONF_CHARGER_PHASES)
         # Its phases: three for a three-phase station (6 A = 4.2 kW), one for a single-phase one, as planned for a switchable one
         phases = 3 if kind == PHASES_TRI else 1 if kind == PHASES_MONO else int(quarter.get("carPhases") or 3)
@@ -216,14 +219,27 @@ class ChargerControl:
                     return
         low = int(charger.get(CONF_CHARGER_MIN_CURRENT, DEFAULT_MIN_CURRENT))
         high = int(charger.get(CONF_CHARGER_MAX_CURRENT, DEFAULT_MAX_CURRENT))
+        # A start the station did not follow: still waiting to start a while after it (a car waking up shows another status)
+        retry = False
+        if not want or driver.is_running():
+            state.update(started_at=None, start_tries=0)
+        elif (not state["pending_start"] and state["started_at"] is not None and driver.can_start()
+                and now - state["started_at"] >= timedelta(minutes=START_CHECK_MINUTES)):
+            if state["start_tries"] >= START_TRIES:
+                block(f"La borne n'a pas démarré après {START_TRIES} essais (statut {status}), rien jusqu'au débranchement")
+                return
+            state["pending_start"] = retry = True
         if state["pending_start"]:
             if driver.is_running():
                 state["pending_start"] = False
             elif driver.can_start():
                 # Its current first: a station starts at the current it had, the whole surplus (or more) bought for a minute
                 await self._set_current(data, quarter, driver, state, phases, low, high, now, test, send)
-                if await send("start", driver.start, "Charger VE" if planned else "Surplus solaire imprévu"):
-                    state["pending_start"] = False
+                reason = "Charger VE" if planned else "Surplus solaire imprévu"
+                if retry:
+                    reason = f"Nouvel essai : la borne n'a pas démarré (statut {status})"
+                if await send("start", driver.start, reason):
+                    state.update(pending_start=False, started_at=now, start_tries=state["start_tries"] + 1)
                     # The grid does not show the car yet: its current looked at again at the next minute
                     return
             elif not driver.is_unplugged():

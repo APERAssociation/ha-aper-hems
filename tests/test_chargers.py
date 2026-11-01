@@ -383,6 +383,26 @@ class ControlTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(h.station.sent(), [])
         self.assertEqual(h.commands(), ["16 A", "start"])
 
+    async def test_a_start_the_station_did_not_follow_is_tried_again(self):
+        # The command goes through, the station stays Preparing (its switch back off): started again two minutes later
+        h = Harness(FakeWallbox(status="Preparing", current=16))
+        await h.tick(planning("charge"))
+        h.station.status, h.station.switch = "Preparing", "off"
+        await h.tick(planning("charge"), minutes=1)
+        self.assertEqual(h.station.sent(), ["start"])
+        await h.tick(planning("charge"), minutes=2)
+        self.assertEqual(h.station.sent(), ["start", "start"])
+        self.assertIn("Nouvel essai", h.log[-1][1])
+        self.assertEqual(h.station.status, "Charging")
+
+    async def test_a_station_that_never_starts_is_left_after_five_tries(self):
+        h = Harness(FakeWallbox(status="Preparing", current=16))
+        for minute in range(0, 14):
+            await h.tick(planning("charge"), minutes=minute)
+            h.station.status, h.station.switch = "Preparing", "off"
+        self.assertEqual(h.station.sent(), ["start"] * 5)
+        self.assertIn("attente débranchement", h.commands())
+
     async def test_a_refused_start_is_tried_again(self):
         station = FakeWallbox(status="Preparing", refuse=True)
         h = Harness(station)
