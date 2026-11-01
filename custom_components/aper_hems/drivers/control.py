@@ -199,20 +199,24 @@ class ChargerControl:
                     if await send("stop", driver.stop, f"Passage en {words} : pause, reprise à la minute suivante"):
                         state["pending_start"] = True
                     return
+        low = int(charger.get(CONF_CHARGER_MIN_CURRENT, DEFAULT_MIN_CURRENT))
+        high = int(charger.get(CONF_CHARGER_MAX_CURRENT, DEFAULT_MAX_CURRENT))
         if state["pending_start"]:
             if driver.is_running():
                 state["pending_start"] = False
             elif driver.can_start():
+                # Its current first: a station starts at the current it had, the whole surplus (or more) bought for a minute
+                await self._set_current(data, quarter, driver, state, phases, low, high, now, test, send)
                 if await send("start", driver.start, "Charger VE"):
                     state["pending_start"] = False
+                    # The grid does not show the car yet: its current looked at again at the next minute
+                    return
             elif not driver.is_unplugged():
                 # A status that does not allow a start: nothing more is tried until the car is unplugged (not plugged in yet:
                 # the start waits for it)
                 block(f"Statut {status} : pas de démarrage, rien jusqu'au débranchement")
                 return
 
-        low = int(charger.get(CONF_CHARGER_MIN_CURRENT, DEFAULT_MIN_CURRENT))
-        high = int(charger.get(CONF_CHARGER_MAX_CURRENT, DEFAULT_MAX_CURRENT))
         known = driver.current_a() if not test else state["current"]
         if not want:
             state["current"] = None
@@ -226,8 +230,13 @@ class ChargerControl:
                 if amperes >= state["manual"]:
                     state["manual"] = None
             return
+        await self._set_current(data, quarter, driver, state, phases, low, high, now, test, send)
 
-        # The current: on the solar surplus in "Solaire d'abord" (quarters planned on the sun), at the highest otherwise
+    async def _set_current(self, data: dict, quarter: dict, driver: ChargerDriver, state: dict, phases: int, low: int, high: int,
+                           now: datetime, test: bool, send) -> None:
+        """The current: on the solar surplus in "Solaire d'abord" (quarters planned on the sun), at the highest otherwise; never
+        above the connection."""
+        known = driver.current_a() if not test else state["current"]
         if (self.production_w() or 0) < NO_SUN_W:
             self.no_sun_since = self.no_sun_since or now
         else:
