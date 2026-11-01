@@ -55,6 +55,7 @@ from .const import (
     DEFAULT_MAX_CURRENT,
     DEFAULT_MIN_CURRENT,
     PHASES_MONO,
+    PHASES_SWITCHABLE,
     PLANNING_API_URL,
     PLANNING_REFRESH_SECONDS,
     CONF_BATTERIES,
@@ -1143,7 +1144,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
         if testing["on"]:
             return
         testing["on"] = True
-        persistent_notification.async_create(hass, f"{name} : test en cours (2 à 6 minutes)…", title, f"{DOMAIN}_test_charger")
+        persistent_notification.async_create(hass, f"{name} : test en cours (2 à 6 minutes, jusqu'à 12 pour une borne Mono/Tri)…", title, f"{DOMAIN}_test_charger")
         entry.async_create_background_task(hass, _run_test(charger, name, driver, title), f"{DOMAIN}_test_charger")
 
     async def _run_test(charger: dict, name: str, driver, title: str) -> None:
@@ -1151,8 +1152,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
         high = min(int(charger.get(CONF_CHARGER_MAX_CURRENT, DEFAULT_MAX_CURRENT)), low + 4)
         phases = 1 if charger.get(CONF_CHARGER_PHASES) == PHASES_MONO else 3
         try:
+            # A station that switches between one and three phases: tested on both
             steps = await run_check(hass, driver, name, low, high, phases,
-                                    lambda: _read_power_w(charger.get(CONF_CHARGER_POWER_ENTITY)))
+                                    lambda: _read_power_w(charger.get(CONF_CHARGER_POWER_ENTITY)),
+                                    switchable=charger.get(CONF_CHARGER_PHASES) == PHASES_SWITCHABLE)
         finally:
             testing["on"] = False
             # The control starts again from what the planning says now
@@ -1174,11 +1177,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
             planning["busy"] = True
             planning["fetched"] = loop_now
             try:
-                async with session.get(PLANNING_API_URL, headers=headers, timeout=aiohttp.ClientTimeout(total=60)) as resp:
-                    if resp.status == 200:
+                # With the values of the moment: the quarter of an hour in progress planned on the sun and the house as they are
+                # now (not only on the forecasts); a site that does not take them yet answers the plain request
+                timeout = aiohttp.ClientTimeout(total=60)
+                async with session.post(PLANNING_API_URL, headers=headers, json=_live_values(), timeout=timeout) as resp:
+                    status = resp.status
+                    if status == 200:
                         planning["data"] = await resp.json()
-                    else:
-                        _LOGGER.debug("Planning: HTTP %s", resp.status)
+                if status == 405:
+                    async with session.get(PLANNING_API_URL, headers=headers, timeout=timeout) as resp:
+                        status = resp.status
+                        if status == 200:
+                            planning["data"] = await resp.json()
+                if status != 200:
+                    _LOGGER.debug("Planning: HTTP %s", status)
             except asyncio.CancelledError:
                 raise
             except (aiohttp.ClientError, asyncio.TimeoutError, OSError, ValueError) as err:

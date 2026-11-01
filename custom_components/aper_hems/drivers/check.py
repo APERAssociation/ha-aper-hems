@@ -2,8 +2,10 @@
 step with the driver of its brand, each step checked on its entities, and the report shown in a notification.
 
 The car must be plugged in and not charging. Steps: the entities, the status, 6 A, start, a higher current, back to the
-lowest, stop, and its current put back as it was. Every step waits for the station to follow (its cloud or OCPP can take
-a while), and the test stops at the first step that fails, the charge stopped.
+lowest, stop, and its current put back as it was. A station that switches between one and three phases (Mono/Tri, a driver
+that can) starts on one phase, then is paused, switched to three and started again, its power checked on each, and is left
+choosing its phases itself. Every step waits for the station to follow (its cloud or OCPP can take a while), and the test
+stops at the first step that fails, the charge stopped.
 """
 
 from __future__ import annotations
@@ -22,15 +24,23 @@ from . import ChargerDriver
 # How long a step waits for the station to follow, and how often it looks
 STEP_TIMEOUT_SECONDS = 90
 POLL_SECONDS = 5
+# How long a power is waited for: a sensor read from the cloud (Easee) is a minute or two late
+POWER_TIMEOUT_SECONDS = 180
 # How much the power must rise between the lowest current and the higher one (W): the car may take less than asked
 POWER_RISE_W = 1000
+# The power of a current on a number of phases, within this share of what it should be: a late sensor still showing the charge
+# before (higher or lower) does not pass
+POWER_LOW_SHARE = 0.5
+POWER_HIGH_SHARE = 1.5
 
 
 async def run_check(hass: HomeAssistant, driver: ChargerDriver, name: str, low: int, high: int, phases: int,
-                    power_w) -> list[tuple[bool | None, str]]:
-    """Runs the test; returns its steps: (True passed, False failed, None skipped or for information, text)."""
+                    power_w, switchable: bool = False) -> list[tuple[bool | None, str]]:
+    """Runs the test; returns its steps: (True passed, False failed, None skipped or for information, text). switchable: a
+    station that switches between one and three phases, tested on both."""
     steps: list[tuple[bool | None, str]] = []
     started = time.monotonic()
+    switchable = switchable and driver.SWITCHES_PHASES
 
     def say(ok: bool | None, text: str) -> None:
         steps.append((ok, f"{round(time.monotonic() - started):>3} s · {text}"))
@@ -45,6 +55,16 @@ async def run_check(hass: HomeAssistant, driver: ChargerDriver, name: str, low: 
 
     def power() -> float | None:
         return power_w()
+
+    def expected(amperes: int, on: int) -> float:
+        return amperes * PHASE_VOLTS * on
+
+    def near(amperes: int, on: int) -> bool:
+        value = power()
+        return value is not None and POWER_LOW_SHARE * expected(amperes, on) <= value <= POWER_HIGH_SHARE * expected(amperes, on)
+
+    def words(on: int) -> str:
+        return "monophasé" if on == 1 else "triphasé"
 
     # 1. The entities
     required = driver.required_entities()
@@ -78,18 +98,42 @@ async def run_check(hass: HomeAssistant, driver: ChargerDriver, name: str, low: 
                 await driver.stop()
             if before is not None:
                 await driver.set_current(int(before))
+            if switchable:
+                await driver.set_phases(0)
         except Exception:  # noqa: BLE001 - the report says what happened, the test must end
             pass
 
+    async def check_power(amperes: int, on: int) -> bool:
+        """The power of this current on these phases (a late sensor waited for); False when it never comes."""
+        if power() is None:
+            return True
+        if await wait(lambda: near(amperes, on), POWER_TIMEOUT_SECONDS):
+            say(True, f"Puissance à {amperes} A en {words(on)} : {round(power() or 0)} W (≈ {round(expected(amperes, on))} W attendus)")
+            return True
+        value = round(power() or 0)
+        other = 3 if on == 1 else 1
+        if switchable and near(amperes, other):
+            say(False, f"Puissance à {amperes} A : {value} W, celle du {words(other)} (≈ {round(expected(amperes, other))} W) "
+                       f"et pas du {words(on)} : la borne n'a pas changé de phases")
+        else:
+            say(False, f"Puissance à {amperes} A en {words(on)} : {value} W, ≈ {round(expected(amperes, on))} W attendus")
+        return False
+
+    first = 1 if switchable else phases
     try:
-        # 3. The lowest current
+        # 3. The phases, for a station that switches: one to start with
+        if switchable:
+            await driver.set_phases(1)
+            say(True, "Monophasé demandé")
+
+        # 4. The lowest current
         await driver.set_current(low)
         if not await wait(lambda: driver.current_a() == low):
             say(False, f"Consigne à {low} A pas suivie : elle reste à {driver.current_a()} A")
             return steps
         say(True, f"Consigne à {low} A suivie")
 
-        # 4. Start: the car may go through SuspendedEV / SuspendedEVSE while it wakes up, it must reach Charging
+        # 5. Start: the car may go through SuspendedEV / SuspendedEVSE while it wakes up, it must reach Charging
         await driver.start()
         if not await wait(lambda: driver.is_running()):
             if driver.is_done():
@@ -99,36 +143,54 @@ async def run_check(hass: HomeAssistant, driver: ChargerDriver, name: str, low: 
                 say(False, f"Démarrage pas suivi : statut {driver.status()}{switch_text()}")
             return steps
         say(True, f"Charge démarrée : statut {driver.status()}")
-        expected_low = round(low * PHASE_VOLTS * phases)
-        if power() is not None:
-            if await wait(lambda: (power() or 0) > expected_low * 0.5):
-                say(True, f"Puissance à {low} A : {round(power() or 0)} W (≈ {expected_low} W attendus)")
-            else:
-                say(False, f"Pas de puissance après le démarrage : {round(power() or 0)} W")
-                return steps
+        # The station may start at another current than asked (an Easee at 7 A at least): back to the lowest first
+        if driver.current_a() != low:
+            await driver.set_current(low)
+            await wait(lambda: driver.current_a() == low)
+        if not await check_power(low, first):
+            return steps
         low_power = power()
 
-        # 5. A higher current
+        # 6. A higher current
         await driver.set_current(high)
         if not await wait(lambda: driver.current_a() == high):
             say(False, f"Consigne à {high} A pas suivie : elle reste à {driver.current_a()} A")
             return steps
         say(True, f"Consigne à {high} A suivie")
         if low_power is not None:
-            if await wait(lambda: (power() or 0) > low_power + POWER_RISE_W):
-                say(True, f"Puissance à {high} A : {round(power() or 0)} W (≈ {round(high * PHASE_VOLTS * phases)} W attendus)")
+            if await wait(lambda: (power() or 0) > low_power + POWER_RISE_W * first / 3, POWER_TIMEOUT_SECONDS):
+                say(True, f"Puissance à {high} A : {round(power() or 0)} W (≈ {round(expected(high, first))} W attendus)")
             else:
                 say(None, f"Puissance à {high} A : {round(power() or 0)} W, presque comme à {low} A "
                           "(la voiture limite peut-être sa charge)")
 
-        # 6. Back to the lowest
+        # 7. Back to the lowest
         await driver.set_current(low)
         if not await wait(lambda: driver.current_a() == low):
             say(False, f"Retour à {low} A pas suivi : la consigne reste à {driver.current_a()} A")
             return steps
         say(True, f"Retour à {low} A suivi")
 
-        # 7. Stop
+        # 8. One phase to three, as the control does it: paused, switched, started again
+        if switchable:
+            await driver.stop()
+            if not await wait(lambda: not driver.is_charging()):
+                say(False, f"Pause avant le passage en triphasé pas suivie : statut {driver.status()}")
+                return steps
+            await driver.set_phases(3)
+            say(True, "Pause, puis triphasé demandé")
+            await driver.start()
+            if not await wait(lambda: driver.is_running()):
+                say(False, f"Reprise en triphasé pas suivie : statut {driver.status()}")
+                return steps
+            say(True, f"Charge reprise : statut {driver.status()}")
+            if driver.current_a() != low:
+                await driver.set_current(low)
+                await wait(lambda: driver.current_a() == low)
+            if not await check_power(low, 3):
+                return steps
+
+        # 9. Stop
         await driver.stop()
         if not await wait(lambda: not driver.is_charging()):
             say(False, f"Arrêt pas suivi : statut {driver.status()}")
@@ -149,5 +211,5 @@ async def run_check(hass: HomeAssistant, driver: ChargerDriver, name: str, low: 
     finally:
         await stop_and_restore()
         if before is not None:
-            say(None, f"Consigne remise à {int(before)} A")
+            say(None, f"Consigne remise à {int(before)} A" + (", phases laissées au choix de la borne" if switchable else ""))
     return steps

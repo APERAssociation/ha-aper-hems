@@ -103,6 +103,7 @@ class ChargerDriver:
         await self.hass.services.async_call(domain, "set_value", {"entity_id": self.current, "value": amperes}, blocking=True)
 
     async def set_phases(self, phases: int) -> None:
+        """Locked to one or three phases; 0: chosen by the station itself."""
         raise NotImplementedError
 
 
@@ -190,7 +191,8 @@ class EaseeDriver(ChargerDriver):
         await self._call("set_charger_dynamic_limit", current=amperes)
 
     async def set_phases(self, phases: int) -> None:
-        await self._call("set_charger_phase_mode", phase_mode="1_phase" if phases == 1 else "3_phase")
+        mode = {1: "1_phase", 3: "3_phase"}.get(phases, "auto_phase")
+        await self._call("set_charger_phase_mode", phase_mode=mode)
 
 
 DRIVERS: dict[str, type[ChargerDriver]] = {
