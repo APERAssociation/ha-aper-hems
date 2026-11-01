@@ -20,7 +20,7 @@ if "aper_hems" not in sys.modules:
     package.__path__ = [str(PACKAGE)]
     sys.modules["aper_hems"] = package
 
-from aper_hems.drivers import WallboxDriver, driver_for  # noqa: E402
+from aper_hems.drivers import EaseeDriver, WallboxDriver, driver_for  # noqa: E402
 from aper_hems.drivers import check  # noqa: E402
 from aper_hems.drivers.control import ChargerControl  # noqa: E402
 
@@ -86,31 +86,104 @@ CHARGER = {"name": "Wallbox", "brand": "wallbox", "switch_entity": SWITCH, "curr
            "plugged_entity": STATUS, "power_entity": POWER, "phases": "tri", "min_current": 6, "max_current": 16}
 
 
-def planning(car="charge", source="grid", mode="best_price", generated=NOW, charger="Wallbox"):
+def planning(car="charge", source="grid", mode="immediate", generated=NOW, charger="Wallbox", phases=3, solar_allowed=False):
     """A planning whose quarter of an hour in progress says what the car does."""
     return {
         "generatedAt": generated.isoformat(), "chargerName": charger, "carMode": mode,
         "quarters": [{"start": (NOW - timedelta(minutes=15) + timedelta(minutes=15 * i)).isoformat(), "car": car,
-                      "carSource": source, "carPhases": 3, "carLabel": "Charger VE" if car == "charge" else "En attente"}
+                      "carSource": source, "carPhases": phases, "solarAllowed": solar_allowed,
+                      "carLabel": "Charger VE" if car == "charge" else "En attente"}
                      for i in range(8)],
     }
 
 
-class Harness:
-    """The control on a fake Wallbox, with the sun and the grid it reads."""
+EASEE_STATUS = "sensor.easee_status"
+EASEE_CURRENT = "sensor.easee_dynamic_charger_limit"
+EASEE_SWITCH = "switch.easee_is_enabled"
 
-    def __init__(self, station: FakeWallbox, production=0.0, grid=0.0, battery=0.0, grid_max_w=None):
+
+class FakeEasee:
+    """An Easee and Home Assistant around it: its status (chargerOpMode), its dynamic limit, its "enabled" switch, and the
+    actions of the Easee integration on its device."""
+
+    def __init__(self, status="awaiting_start", current=16, car_takes=True, enabled="on", obeys_phases=True):
+        self.status = status
+        self.current = current
+        self.car_takes = car_takes
+        self.enabled = enabled
+        self.phase_mode = "auto_phase"
+        # A station that does not follow the phase mode stays on three phases
+        self.obeys_phases = obeys_phases
+        self.calls: list[tuple[str, str, dict]] = []
+        self.states = self
+        self.services = self
+
+    def power(self) -> float:
+        phases = 1 if self.phase_mode == "1_phase" and self.obeys_phases else 3
+        return self.current * 400 / 3 ** 0.5 * phases if self.status == "charging" else 0
+
+    def get(self, entity_id):
+        value = {EASEE_STATUS: self.status, EASEE_CURRENT: str(self.current), EASEE_SWITCH: self.enabled}.get(entity_id)
+        return None if value is None else State(value)
+
+    async def async_call(self, domain, service, data, blocking=False):
+        self.calls.append((domain, service, data))
+        if (domain, service) == ("switch", "turn_on"):
+            self.enabled = "on"
+            return
+        assert domain == "easee" and data["device_id"] == "easee-device"
+        if service == "action_command":
+            command = data["action_command"]
+            if command in ("resume", "start") and self.status in ("awaiting_start", "ready_to_charge", "awaiting_authorization"):
+                self.status = "charging" if self.car_takes else "ready_to_charge"
+            elif command == "pause" and self.status in ("charging", "ready_to_charge"):
+                self.status = "awaiting_start"
+        elif service == "set_charger_dynamic_limit":
+            self.current = int(data["current"])
+        elif service == "set_charger_phase_mode":
+            self.phase_mode = data["phase_mode"]
+
+    def sent(self) -> list[str]:
+        words = []
+        for domain, service, data in self.calls:
+            if service == "action_command":
+                words.append(data["action_command"])
+            elif service == "set_charger_dynamic_limit":
+                words.append(f"{data['current']} A")
+            elif service == "set_charger_phase_mode":
+                words.append(data["phase_mode"])
+            else:
+                words.append(f"{domain}.{service}")
+        return words
+
+
+EASEE = {"name": "Easee", "brand": "easee", "switch_entity": EASEE_SWITCH, "current_entity": EASEE_CURRENT,
+         "plugged_entity": EASEE_STATUS, "phases": "tri", "min_current": 6, "max_current": 16}
+
+
+def easee_factory(hass, charger, brand):
+    """The real driver, on the device of the fake station (Home Assistant's entity registry is not there)."""
+    driver = driver_for(hass, charger, brand)
+    if driver is not None:
+        driver.device_id = "easee-device"
+    return driver
+
+
+class Harness:
+    """The control on a fake station (a Wallbox unless told), with the sun and the grid it reads."""
+
+    def __init__(self, station, production=0.0, grid=0.0, battery=0.0, grid_max_w=None, charger=None):
         self.station = station
         self.production = production
         self.grid = grid
         self.battery = battery
         self.log: list[tuple[str, str]] = []
         self.control = ChargerControl(
-            station, [CHARGER],
+            station, [charger or CHARGER],
             live_values=lambda: {"grid": self.grid, "battery": self.battery},
             production_w=lambda: self.production,
             log=lambda name, command, reason, test, **extra: self.log.append((command, reason)),
-            grid_max_w=grid_max_w)
+            grid_max_w=grid_max_w, driver_factory=easee_factory)
 
     async def tick(self, data, minutes=0, test=False):
         await self.control.tick(data, NOW + timedelta(minutes=minutes), test)
@@ -130,15 +203,25 @@ class DriverTests(unittest.TestCase):
             self.assertEqual(driver.can_start(), allowed, status)
 
     def test_a_brand_without_driver_is_not_driven(self):
-        self.assertIsNone(driver_for(FakeWallbox(), {**CHARGER, "brand": "easee"}, "easee"))
+        self.assertIsNone(driver_for(FakeWallbox(), {**CHARGER, "brand": "zaptec"}, "zaptec"))
         self.assertIsNone(driver_for(FakeWallbox(), {**CHARGER, "switch_entity": None}, "wallbox"))
+
+    def test_an_easee_needs_no_switch(self):
+        self.assertIsInstance(driver_for(FakeEasee(), {**EASEE, "switch_entity": None}, "easee"), EaseeDriver)
+
+    def test_easee_starts_when_awaiting_start(self):
+        for status, allowed in (("awaiting_start", True), ("ready_to_charge", True), ("disconnected", False),
+                                ("charging", False), ("completed", False), ("error", False)):
+            driver = EaseeDriver(FakeEasee(status=status), EASEE)
+            self.assertEqual(driver.can_start(), allowed, status)
 
 
 class ControlTests(unittest.IsolatedAsyncioTestCase):
     async def test_starts_at_full_power_when_the_planning_charges(self):
         h = Harness(FakeWallbox(status="Preparing", current=6))
         await h.tick(planning("charge"))
-        self.assertEqual(h.station.sent(), ["start", "16 A"])
+        # Its current first: it starts at the current it had
+        self.assertEqual(h.station.sent(), ["16 A", "start"])
         self.assertEqual(h.station.status, "Charging")
 
     async def test_stops_when_the_planning_stops(self):
@@ -230,9 +313,13 @@ class ControlTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(h.station.sent(), ["10 A"])
 
     async def test_solar_first_keeps_the_lowest_current_under_clouds(self):
-        # 5542 W taken (8 A), 1500 W bought, the battery giving 500 W: 3542 W → 5 A, kept at 6 A
-        h = Harness(FakeWallbox(status="Charging", current=8), production=3000, grid=1500, battery=-500)
+        # On the sun: 5542 W taken (8 A) and 500 W exported
+        h = Harness(FakeWallbox(status="Charging", current=8), production=7000, grid=-500)
         await h.tick(planning("charge", source="solar", mode="solar_first"))
+        self.assertEqual(h.station.sent(), [])
+        # A cloud: 1500 W bought, the battery giving 500 W: 3542 W → 5 A, kept at 6 A
+        h.grid, h.battery = 1500, -500
+        await h.tick(planning("charge", source="solar", mode="solar_first"), minutes=1)
         self.assertEqual(h.station.sent(), ["6 A"])
 
     async def test_solar_first_never_above_the_highest_current(self):
@@ -240,14 +327,11 @@ class ControlTests(unittest.IsolatedAsyncioTestCase):
         await h.tick(planning("charge", source="solar", mode="solar_first"))
         self.assertEqual(h.station.sent(), [])
 
-    async def test_without_sun_for_ten_minutes_full_power(self):
+    async def test_a_quarter_planned_on_the_sun_without_sun_seen_live_does_not_charge(self):
+        # The forecast said sun, the live says 4140 W bought: the planning is not followed, the live is
         h = Harness(FakeWallbox(status="Charging", current=6), production=0, grid=4140)
-        data = planning("charge", source="solar", mode="solar_first")
-        await h.tick(data)
-        self.assertEqual(h.station.sent(), [])
-        await h.tick(data, minutes=10)
-        self.assertEqual(h.station.sent(), ["16 A"])
-        self.assertEqual(h.log[-1][1], "Pas de soleil : pleine puissance")
+        await h.tick(planning("charge", source="solar", mode="solar_first"))
+        self.assertEqual(h.station.sent(), ["stop"])
 
     async def test_from_the_grid_full_power(self):
         h = Harness(FakeWallbox(status="Charging", current=6), production=9000, grid=-2000)
@@ -280,7 +364,7 @@ class ControlTests(unittest.IsolatedAsyncioTestCase):
         await h.tick(planning("charge"), test=True)
         await h.tick(planning("charge"), minutes=1, test=True)
         self.assertEqual(h.station.sent(), [])
-        self.assertEqual(h.commands(), ["start", "16 A"])
+        self.assertEqual(h.commands(), ["16 A", "start"])
 
     async def test_a_refused_start_is_tried_again(self):
         station = FakeWallbox(status="Preparing", refuse=True)
@@ -290,6 +374,177 @@ class ControlTests(unittest.IsolatedAsyncioTestCase):
         await h.tick(planning("charge"), minutes=1)
         self.assertEqual(station.sent(), ["start", "start"])
         self.assertEqual(station.status, "Charging")
+
+
+class EaseeTests(unittest.IsolatedAsyncioTestCase):
+    """An Easee: resumed and paused through its integration, its dynamic limit, its phases locked as planned."""
+
+    def harness(self, station, **charger):
+        return Harness(station, charger={**EASEE, **charger})
+
+    async def test_resumes_at_full_power_when_the_planning_charges(self):
+        h = self.harness(FakeEasee(status="awaiting_start", current=10))
+        await h.tick(planning("charge", charger="Easee"))
+        self.assertEqual(h.station.sent(), ["16 A", "resume"])
+        self.assertEqual(h.station.status, "charging")
+
+    async def test_a_start_at_6_a_goes_up_to_7_a_first(self):
+        h = self.harness(FakeEasee(status="awaiting_start", current=6), max_current=6)
+        await h.tick(planning("charge", charger="Easee"))
+        self.assertEqual(h.station.sent(), ["7 A", "resume"])
+        # Back to its current at the next minute
+        await h.tick(planning("charge", charger="Easee"), minutes=1)
+        self.assertEqual(h.station.sent(), ["7 A", "resume", "6 A"])
+
+    async def test_pauses_when_the_planning_stops_and_resumes_at_the_next_slot(self):
+        h = self.harness(FakeEasee(status="awaiting_start"))
+        await h.tick(planning("charge", charger="Easee"))
+        await h.tick(planning("wait", charger="Easee"), minutes=1)
+        self.assertEqual(h.station.status, "awaiting_start")
+        await h.tick(planning("charge", charger="Easee"), minutes=2)
+        self.assertEqual(h.station.sent(), ["resume", "pause", "resume"])
+
+    async def test_a_disabled_charger_is_enabled_first(self):
+        h = self.harness(FakeEasee(status="awaiting_start", enabled="off"))
+        await h.tick(planning("charge", charger="Easee"))
+        self.assertEqual(h.station.sent(), ["switch.turn_on", "resume"])
+
+    async def test_a_completed_charge_waits_until_unplugged(self):
+        h = self.harness(FakeEasee(status="completed"))
+        await h.tick(planning("charge", charger="Easee"))
+        self.assertEqual(h.station.sent(), [])
+        self.assertIn("attente débranchement", h.commands())
+        await h.tick(planning("charge", charger="Easee"), minutes=1)
+        self.assertEqual(h.station.sent(), [])
+        h.station.status = "disconnected"
+        await h.tick(planning("charge", charger="Easee"), minutes=2)
+        self.assertIn("nouveau cycle", h.commands())
+        h.station.status = "awaiting_start"
+        await h.tick(planning("charge", charger="Easee"), minutes=3)
+        self.assertIn("resume", h.station.sent())
+
+    async def test_a_car_that_stays_ready_to_charge_blocks_until_unplugged(self):
+        h = self.harness(FakeEasee(status="awaiting_start", car_takes=False))
+        await h.tick(planning("charge", charger="Easee"))
+        self.assertEqual(h.station.status, "ready_to_charge")
+        await h.tick(planning("charge", charger="Easee"), minutes=1)
+        self.assertNotIn("attente débranchement", h.commands())
+        await h.tick(planning("charge", charger="Easee"), minutes=6)
+        self.assertIn("attente débranchement", h.commands())
+
+    async def test_a_switchable_easee_takes_the_phases_of_the_planning(self):
+        h = self.harness(FakeEasee(status="awaiting_start"), phases="mono_tri")
+        # One phase planned (the sun is weak): locked to one phase before the start
+        await h.tick(planning("charge", charger="Easee", phases=1))
+        self.assertEqual(h.station.sent(), ["1_phase", "resume"])
+        # Then three: paused to take them, resumed at the next minute
+        await h.tick(planning("charge", charger="Easee", phases=3), minutes=1)
+        self.assertEqual(h.station.sent()[2:], ["3_phase", "pause"])
+        await h.tick(planning("charge", charger="Easee", phases=3), minutes=2)
+        self.assertEqual(h.station.sent()[4:], ["resume"])
+        self.assertEqual(h.station.phase_mode, "3_phase")
+        # Nothing more while they stay the same
+        await h.tick(planning("charge", charger="Easee", phases=3), minutes=3)
+        self.assertEqual(len(h.station.sent()), 5)
+
+    async def test_a_three_phase_easee_is_not_switched(self):
+        h = self.harness(FakeEasee(status="awaiting_start"))
+        await h.tick(planning("charge", charger="Easee", phases=1))
+        self.assertNotIn("1_phase", h.station.sent())
+
+    async def test_solar_surplus_on_one_phase(self):
+        # One phase at 6 A (1386 W), 1000 W exported: 2386 W → 10 A on one phase
+        h = Harness(FakeEasee(status="charging", current=6), production=4000, grid=-1000,
+                    charger={**EASEE, "phases": "mono_tri"})
+        h.control.stations["Easee"] = {"want": True, "pending_start": False, "current": None, "blocked": False,
+                                       "done_since": None, "manual": None, "phases": 1, "sun": False, "sun_since": None,
+                                       "sun_low_since": None}
+        await h.tick(planning("charge", source="solar", mode="solar_first", charger="Easee", phases=1))
+        self.assertEqual(h.station.sent(), ["10 A"])
+
+
+class UnplannedSunTests(unittest.IsolatedAsyncioTestCase):
+    """"Solaire d'abord" or "Plein au bon prix", whatever the planning says: the surplus seen live is charged."""
+
+    def waiting(self):
+        return planning("wait", source="none", mode="solar_first", charger="Easee", phases=0, solar_allowed=True)
+
+    async def test_starts_once_the_surplus_has_lasted(self):
+        # 2000 W exported: 8 A on one phase (1847 W) for a station that switches
+        h = Harness(FakeEasee(status="awaiting_start", current=0), production=3000, grid=-2000, charger={**EASEE, "phases": "mono_tri"})
+        for minute in range(3):
+            await h.tick(self.waiting(), minutes=minute)
+        self.assertEqual(h.station.sent(), [])
+        await h.tick(self.waiting(), minutes=3)
+        self.assertEqual(h.station.sent(), ["1_phase", "8 A", "resume"])
+        self.assertIn(("start", "Surplus solaire imprévu"), h.log)
+
+    async def test_a_big_surplus_is_charged_on_three_phases(self):
+        # 6000 W exported: three phases (6 A × 3 = 4157 W fits), 8 A (5543 W)
+        h = Harness(FakeEasee(status="awaiting_start", current=0), production=7000, grid=-6000, charger={**EASEE, "phases": "mono_tri"})
+        for minute in range(4):
+            await h.tick(self.waiting(), minutes=minute)
+        self.assertEqual(h.station.sent(), ["3_phase", "8 A", "resume"])
+
+    async def test_from_one_phase_to_three_once_the_sun_has_grown_for_a_while(self):
+        h = Harness(FakeEasee(status="awaiting_start", current=0), production=3000, grid=-2000, charger={**EASEE, "phases": "mono_tri"})
+        for minute in range(4):
+            await h.tick(self.waiting(), minutes=minute)
+        self.assertEqual(h.station.phase_mode, "1_phase")
+        # The sun grows: the car (8 A on one phase, 1847 W) and 4000 W exported, 5847 W in all
+        h.grid = -4000
+        for minute in range(4, 9):
+            await h.tick(self.waiting(), minutes=minute)
+        self.assertEqual(h.station.phase_mode, "1_phase")
+        await h.tick(self.waiting(), minutes=9)
+        self.assertEqual(h.station.phase_mode, "3_phase")
+        self.assertIn("pause", h.station.sent())
+
+    async def test_also_in_best_price(self):
+        h = Harness(FakeEasee(status="awaiting_start", current=0), production=3000, grid=-2000, charger={**EASEE, "phases": "mono_tri"})
+        for minute in range(4):
+            await h.tick(planning("wait", source="none", mode="best_price", charger="Easee", phases=0), minutes=minute)
+        self.assertEqual(h.station.sent(), ["1_phase", "8 A", "resume"])
+
+    async def test_not_in_immediate(self):
+        h = Harness(FakeEasee(status="awaiting_start", current=0), production=3000, grid=-2000, charger={**EASEE, "phases": "mono_tri"})
+        for minute in range(6):
+            await h.tick(planning("wait", source="none", mode="immediate", charger="Easee", phases=0), minutes=minute)
+        self.assertEqual(h.station.sent(), [])
+
+    async def test_a_charge_from_the_grid_goes_on_at_once_on_the_sun(self):
+        h = Harness(FakeEasee(status="awaiting_start", current=6), production=3000, grid=-2000, charger={**EASEE, "phases": "mono_tri"})
+        await h.tick(planning("charge", source="grid", mode="solar_first", charger="Easee", phases=1))
+        self.assertEqual(h.station.status, "charging")
+        # The next quarter, without a charge from the grid: the surplus there, it goes on without a stop
+        h.grid = -300
+        await h.tick(self.waiting(), minutes=1)
+        self.assertNotIn("pause", h.station.sent())
+
+    async def test_stops_after_five_minutes_without_enough_sun(self):
+        h = Harness(FakeEasee(status="awaiting_start", current=0), production=3000, grid=-2000, charger={**EASEE, "phases": "mono_tri"})
+        for minute in range(4):
+            await h.tick(self.waiting(), minutes=minute)
+        self.assertEqual(h.station.status, "charging")
+        # A cloud: the car (8 A, 1847 W) now buys 1500 W
+        h.grid = 1500
+        for minute in range(4, 9):
+            await h.tick(self.waiting(), minutes=minute)
+        self.assertNotIn("pause", h.station.sent())
+        await h.tick(self.waiting(), minutes=9)
+        # Paused, then its phases left to it again (a charge by hand from its app on three phases, as before)
+        self.assertEqual(h.station.sent()[-2:], ["pause", "auto_phase"])
+        self.assertIn(("stop", "Surplus solaire sous le courant minimal depuis 5 min"), h.log)
+        self.assertEqual(h.station.phase_mode, "auto_phase")
+
+    async def test_phases_left_to_the_station_when_the_car_is_unplugged(self):
+        h = Harness(FakeEasee(status="awaiting_start", current=6), production=3000, grid=-2000, charger={**EASEE, "phases": "mono_tri"})
+        for minute in range(4):
+            await h.tick(self.waiting(), minutes=minute)
+        self.assertEqual(h.station.phase_mode, "1_phase")
+        h.station.status = "disconnected"
+        await h.tick(self.waiting(), minutes=4)
+        self.assertEqual(h.station.phase_mode, "auto_phase")
 
 
 class GridLimitTests(unittest.IsolatedAsyncioTestCase):
@@ -321,13 +576,23 @@ class GridLimitTests(unittest.IsolatedAsyncioTestCase):
         await h.tick(planning("charge"))
         self.assertEqual(h.station.sent(), ["6 A"])
 
-    async def test_a_start_above_the_limit_is_lowered_as_soon_as_the_grid_shows_it(self):
-        # The house takes 5000 W; started at 16 A, the grid then shows 16085 W: 7000 W left → 10 A (6928 W)
+    async def test_a_start_is_set_under_the_limit_before_it_starts(self):
+        # The house takes 5000 W: 7000 W left → 10 A (6928 W) before the start, nothing more once the grid shows the car
         h = Harness(FakeWallbox(status="Preparing", current=16), grid=5000, grid_max_w=12000)
         await h.tick(planning("charge"))
-        h.grid = 5000 + 11085
+        self.assertEqual(h.station.sent(), ["10 A", "start"])
+        h.grid = 5000 + 6928
         await h.protect(planning("charge"), minutes=0.1)
-        self.assertEqual(h.station.sent(), ["start", "10 A"])
+        await h.tick(planning("charge"), minutes=1)
+        self.assertEqual(h.station.sent(), ["10 A", "start"])
+
+    async def test_a_solar_start_takes_the_surplus_current_first(self):
+        # 5000 W exported for 3 minutes, nothing charging yet: 5000 W ÷ 692.8 W per ampere → 7 A, set before the start (not
+        # 16 A for a minute)
+        h = Harness(FakeWallbox(status="Preparing", current=16), production=6000, grid=-5000)
+        for minute in range(4):
+            await h.tick(planning("wait", source="none", mode="solar_first"), minutes=minute)
+        self.assertEqual(h.station.sent(), ["7 A", "start"])
 
     async def test_protect_lowers_at_once_between_two_minutes(self):
         h = Harness(FakeWallbox(status="Charging", current=16), grid=11000, grid_max_w=12000)
@@ -364,6 +629,7 @@ class CheckTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         check.POLL_SECONDS = 0
         check.STEP_TIMEOUT_SECONDS = 0.05
+        check.POWER_TIMEOUT_SECONDS = 0.05
 
     async def run_check(self, station: FakeWallbox):
         driver = WallboxDriver(station, CHARGER)
@@ -411,6 +677,39 @@ class CheckTests(unittest.IsolatedAsyncioTestCase):
         steps = await check.run_check(station, driver, "Wallbox", 6, 10, 3, late_power)
         self.assertNotIn(False, [ok for ok, _ in steps])
         self.assertIn("en retard", steps[-2][1])
+
+    async def test_an_easee_passes_every_step_without_a_switch(self):
+        station = FakeEasee(status="awaiting_start", current=16)
+        driver = EaseeDriver(station, {**EASEE, "switch_entity": None})
+        driver.device_id = "easee-device"
+        steps = await check.run_check(station, driver, "Easee", 6, 10, 3, lambda: None)
+        self.assertNotIn(False, [ok for ok, _ in steps])
+        # Started at 7 A (its firmware), back to 6 A
+        self.assertEqual(station.sent(), ["6 A", "7 A", "resume", "6 A", "10 A", "6 A", "pause", "16 A"])
+
+    async def test_a_switchable_easee_is_tested_on_one_phase_then_three(self):
+        station = FakeEasee(status="awaiting_start", current=0)
+        driver = EaseeDriver(station, {**EASEE, "phases": "mono_tri"})
+        driver.device_id = "easee-device"
+        steps = await check.run_check(station, driver, "Easee", 6, 10, 3, station.power, switchable=True)
+        self.assertNotIn(False, [ok for ok, _ in steps], steps)
+        sent = station.sent()
+        self.assertEqual(sent[0], "1_phase")
+        self.assertIn("3_phase", sent)
+        self.assertLess(sent.index("pause"), sent.index("3_phase"))
+        # Left choosing its phases, its current as it was
+        self.assertEqual(sent[-2:], ["0 A", "auto_phase"])
+        self.assertTrue(any("1386 W attendus" in text for _, text in steps))
+        self.assertTrue(any("4157 W attendus" in text for _, text in steps))
+
+    async def test_an_easee_that_does_not_switch_phases_fails(self):
+        station = FakeEasee(status="awaiting_start", current=0, obeys_phases=False)
+        driver = EaseeDriver(station, {**EASEE, "phases": "mono_tri"})
+        driver.device_id = "easee-device"
+        steps = await check.run_check(station, driver, "Easee", 6, 10, 3, station.power, switchable=True)
+        self.assertFalse(steps[-2][0])
+        self.assertIn("n'a pas changé de phases", steps[-2][1])
+        self.assertEqual(station.status, "awaiting_start")
 
     async def test_says_when_the_car_wants_no_energy(self):
         station = FakeWallbox(status="Preparing", car_takes=False)

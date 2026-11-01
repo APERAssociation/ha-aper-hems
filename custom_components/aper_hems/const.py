@@ -110,14 +110,14 @@ CHARGERS_CONTROL_DEFAULTS = {
     CONF_CHARGERS_CONTROL_TEST: True,
 }
 CHARGER_COMMANDS_ENTITY = "sensor.aper_hems_commandes_borne"
-# Without sun (production under this, in W) for this long, a solar charge goes to the highest current
-NO_SUN_W = 50
-NO_SUN_MINUTES = 10
-# "Solaire d'abord", where the planning allows the sun (solarAllowed: plugged in, in its ranges, not full): a solar surplus
-# reaching the lowest current this long starts a charge the planning did not plan, kept while the surplus lasts and stopped
-# once it has been under the lowest current this long (no stopping at each cloud)
+# "Solaire d'abord" or "Plein au bon prix", plugged in, no grid charge planned: a surplus seen live (export, battery charge)
+# reaching the lowest current this long starts a charge, its current following the surplus each minute, stopped once it has
+# been under the lowest current this long (no stopping at each cloud)
 SUN_START_MINUTES = 3
 SUN_STOP_MINUTES = 5
+# A station that switches, on such a surplus: three phases once it reaches the lowest three-phase current with this margin, one
+# when it falls under it by this margin, each change held SUN_STOP_MINUTES first (it pauses and starts the charge again)
+SUN_PHASE_MARGIN_W = 300
 # A car that wants no energy this long (SuspendedEV) is full or follows its own schedule: nothing more until it is
 # unplugged. Shorter, it is only waking up after a start
 DONE_AFTER_MINUTES = 5
