@@ -301,7 +301,7 @@ class ChargerControl:
     def _sun(self, data: dict, quarter: dict, charger: dict, driver: ChargerDriver, state: dict, phases: int, now: datetime,
              planned: bool) -> bool:
         """A charge on the solar surplus seen live (the export, what the car takes, the battery), whatever the planning says,
-        when no charge from the grid is planned, the car plugged in, in "Solaire d'abord" or "Plein au bon prix" (the sun is
+        when no charge from the grid is planned, the car plugged in, in "Solaire d'abord" or "Bon tarif et soleil" (the sun is
         free). Started once the surplus has reached the lowest current for SUN_START_MINUTES (at once for a charge already
         going on: started by the planning, or on the sun before), stopped once it has been under it for SUN_STOP_MINUTES."""
         if planned or data.get("carMode") not in ("solar_first", "best_price") or driver.is_unplugged():

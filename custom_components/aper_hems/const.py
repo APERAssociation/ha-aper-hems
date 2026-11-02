@@ -113,7 +113,7 @@ CHARGERS_CONTROL_DEFAULTS = {
     CONF_CHARGERS_NOTIFY: True,
 }
 CHARGER_COMMANDS_ENTITY = "sensor.aper_hems_commandes_borne"
-# "Solaire d'abord" or "Plein au bon prix", plugged in, no grid charge planned: a surplus seen live (export, battery charge)
+# "Solaire d'abord" or "Bon tarif et soleil", plugged in, no grid charge planned: a surplus seen live (export, battery charge)
 # reaching the lowest current this long starts a charge, its current following the surplus each minute, stopped once it has
 # been under the lowest current this long (no stopping at each cloud)
 SUN_START_MINUTES = 3
@@ -174,10 +174,9 @@ COVERAGE_API_URL = f"{API_BASE_URL}/api/energydata/coverage"
 DEVICES_API_URL = f"{API_BASE_URL}/api/energydata/devices"
 DEVICES_MIN_SECONDS = 10
 DEVICES_HEARTBEAT_SECONDS = 300
-# The planning of the HEMS by quarter of an hour (today and tomorrow), fetched every 5 minutes; the entities follow the quarter
-# of an hour in progress every minute
+# The planning of the HEMS by quarter of an hour (today and tomorrow), fetched at the start of each quarter of an hour with the
+# values of that moment (the best plan for the real conditions: the level of the battery, the sun and the house then)
 PLANNING_API_URL = f"{API_BASE_URL}/api/energydata/planning?days=2"
-PLANNING_REFRESH_SECONDS = 300
 # Live values for the cockpit: a WebSocket kept open to the site, which says when a cockpit is watching
 # ("watch" message). Values are then sent at each change (at most once a second) and every 10 s anyway.
 LIVE_WS_URL = "wss://aper-association.ch/api/energydata/live"

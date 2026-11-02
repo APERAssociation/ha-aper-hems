@@ -20,7 +20,7 @@ from homeassistant.components.recorder.history import state_changes_during_perio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, ServiceCall, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
+from homeassistant.helpers.event import async_track_state_change_event, async_track_time_change, async_track_time_interval
 from homeassistant.util import dt as dt_util
 
 from . import drivers
@@ -58,7 +58,6 @@ from .const import (
     PHASES_MONO,
     PHASES_SWITCHABLE,
     PLANNING_API_URL,
-    PLANNING_REFRESH_SECONDS,
     CONF_BATTERIES,
     CONF_BATTERY_CAPACITY,
     CONF_BATTERY_LEVEL_ENTITY,
@@ -972,7 +971,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
     # The planning of the HEMS: fetched every 5 minutes, written every minute into the sensor chosen (its state: where the home
     # takes its energy in the current quarter of an hour) and into the same name ending in "_car" (what the car does)
     planning_entity = entry.options.get(CONF_PLANNING_ENTITY, DEFAULT_PLANNING_ENTITY)
-    planning = {"data": None, "fetched": 0.0, "busy": False}
+    planning = {"data": None, "quarter": None, "busy": False}
 
     def _planning_write() -> None:
         data = planning["data"]
@@ -1208,10 +1207,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
     async def _planning_tick(_now=None):
         if not planning_entity and not control_entity and not chargers_control[CONF_CHARGERS_CONTROL]:
             return
-        loop_now = hass.loop.time()
-        if not planning["busy"] and loop_now - planning["fetched"] >= PLANNING_REFRESH_SECONDS:
+        # A new planning at the start of each quarter of an hour, from the conditions of that moment (the level of the battery,
+        # the sun, the house), then kept until the next one: the battery does not change its mind within a quarter of an hour;
+        # not received: tried again at the next minute
+        utc = dt_util.utcnow()
+        quarter = utc.replace(minute=utc.minute - utc.minute % 15, second=0, microsecond=0)
+        if not planning["busy"] and planning["quarter"] != quarter:
             planning["busy"] = True
-            planning["fetched"] = loop_now
             try:
                 # With the values of the moment: the quarter of an hour in progress planned on the sun and the house as they are
                 # now (not only on the forecasts); a site that does not take them yet answers the plain request
@@ -1220,18 +1222,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
                     status = resp.status
                     if status == 200:
                         planning["data"] = await resp.json()
+                        planning["quarter"] = quarter
                 if status == 405:
                     async with session.get(PLANNING_API_URL, headers=headers, timeout=timeout) as resp:
                         status = resp.status
                         if status == 200:
                             planning["data"] = await resp.json()
+                            planning["quarter"] = quarter
                 if status != 200:
                     _LOGGER.debug("Planning: HTTP %s", status)
             except asyncio.CancelledError:
                 raise
             except (aiohttp.ClientError, asyncio.TimeoutError, OSError, ValueError) as err:
                 # Tried again in a minute
-                planning["fetched"] = loop_now - PLANNING_REFRESH_SECONDS + 60
                 _LOGGER.debug("Planning not received: %s", type(err).__name__)
             finally:
                 planning["busy"] = False
@@ -1240,6 +1243,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
         await _drive_chargers()
 
     entry.async_on_unload(async_track_time_interval(hass, _planning_tick, timedelta(minutes=1)))
+    # Right at the start of each quarter of an hour (a few seconds after, the live values of that moment)
+    entry.async_on_unload(async_track_time_change(hass, _planning_tick, minute=[0, 15, 30, 45], second=5))
 
     live_entities = [eid for eid in (grid_entity, production_entity, battery_entity, battery_soc_entity) if eid]
     for consumer in entry.options.get(CONF_CONSUMERS, []):
