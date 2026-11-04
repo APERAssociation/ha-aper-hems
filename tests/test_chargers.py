@@ -476,15 +476,13 @@ class EaseeTests(unittest.IsolatedAsyncioTestCase):
         # One phase planned (the sun is weak): locked to one phase before the start
         await h.tick(planning("charge", charger="Easee", phases=1))
         self.assertEqual(h.station.sent(), ["1_phase", "resume"])
-        # Then three: paused to take them, resumed at the next minute
+        # Then three: the station switches by itself, the charge is not paused
         await h.tick(planning("charge", charger="Easee", phases=3), minutes=1)
-        self.assertEqual(h.station.sent()[2:], ["3_phase", "pause"])
-        await h.tick(planning("charge", charger="Easee", phases=3), minutes=2)
-        self.assertEqual(h.station.sent()[4:], ["resume"])
-        self.assertEqual(h.station.phase_mode, "3_phase")
+        self.assertEqual(h.station.sent()[2:], ["3_phase"])
+        self.assertEqual((h.station.phase_mode, h.station.status), ("3_phase", "charging"))
         # Nothing more while they stay the same
-        await h.tick(planning("charge", charger="Easee", phases=3), minutes=3)
-        self.assertEqual(len(h.station.sent()), 5)
+        await h.tick(planning("charge", charger="Easee", phases=3), minutes=2)
+        self.assertEqual(len(h.station.sent()), 3)
 
     async def test_a_three_phase_easee_is_not_switched(self):
         h = self.harness(FakeEasee(status="awaiting_start"))
@@ -536,10 +534,9 @@ class UnplannedSunTests(unittest.IsolatedAsyncioTestCase):
         await h.tick(self.waiting(), minutes=4)
         self.assertEqual(h.station.phase_mode, "3_phase")
         await h.tick(self.waiting(), minutes=5)
-        self.assertEqual(h.station.sent()[:2], ["1_phase", "pause"])
-        await h.tick(self.waiting(), minutes=6)
-        self.assertEqual(h.station.phase_mode, "1_phase")
-        self.assertIn("resume", h.station.sent())
+        self.assertEqual(h.station.sent()[:1], ["1_phase"])
+        self.assertEqual((h.station.phase_mode, h.station.status), ("1_phase", "charging"))
+        self.assertNotIn("pause", h.station.sent())
 
     async def test_from_one_phase_to_three_once_the_sun_has_grown_for_a_while(self):
         h = Harness(FakeEasee(status="awaiting_start", current=0), production=3000, grid=-2000, charger={**EASEE, "phases": "mono_tri"})
@@ -547,13 +544,44 @@ class UnplannedSunTests(unittest.IsolatedAsyncioTestCase):
             await h.tick(self.waiting(), minutes=minute)
         self.assertEqual(h.station.phase_mode, "1_phase")
         # The sun grows: the car (8 A on one phase, 1847 W) and 4000 W exported, 5847 W in all
-        h.grid = -4000
+        h.grid, h.production = -4000, 7000
         for minute in range(4, 9):
             await h.tick(self.waiting(), minutes=minute)
         self.assertEqual(h.station.phase_mode, "1_phase")
         await h.tick(self.waiting(), minutes=9)
         self.assertEqual(h.station.phase_mode, "3_phase")
-        self.assertIn("pause", h.station.sent())
+        # Switched by the station itself, the charge not paused
+        self.assertNotIn("pause", h.station.sent())
+
+    async def test_a_charge_on_the_sun_is_not_started_again_soon_after_a_stop(self):
+        # On the sun, then a cloud: stopped after 5 minutes; the sun back at once, but no start before 15 minutes after the stop
+        h = Harness(FakeEasee(status="awaiting_start", current=0), production=7000, grid=-6000, charger={**EASEE, "phases": "mono_tri"})
+        for minute in range(4):
+            await h.tick(self.waiting(), minutes=minute)
+        self.assertEqual(h.station.status, "charging")
+        h.production, h.grid = 500, 3000
+        minute = 4
+        while h.station.status == "charging" and minute < 20:
+            await h.tick(self.waiting(), minutes=minute)
+            minute += 1
+        stopped = minute - 1
+        self.assertEqual(h.station.status, "awaiting_start")
+        h.production, h.grid = 7000, -6000
+        for later in range(stopped + 1, stopped + 15):
+            await h.tick(self.waiting(), minutes=later)
+        self.assertEqual(h.station.status, "awaiting_start")
+        await h.tick(self.waiting(), minutes=stopped + 15)
+        self.assertEqual(h.station.status, "charging")
+
+    async def test_no_surplus_at_night_from_a_car_taking_less_than_its_setting(self):
+        # Night, the car still charging (11.5 kW bought): its Easee set at 32 A on three phases (22 kW from its setting) while
+        # its own charger takes 11 kW. Without the sun, what it takes is bought, never a surplus of 10 kW
+        h = Harness(FakeEasee(status="charging", current=32), production=0, grid=11500, charger={**EASEE, "phases": "mono_tri"})
+        night = planning("wait", source="none", mode="solar_first", charger="Easee", phases=3, solar_allowed=True)
+        for minute in range(8):
+            h.station.status = "charging"
+            await h.tick(night, minutes=minute)
+        self.assertEqual([reason for _, reason in h.log if reason.startswith("Surplus solaire")], [])
 
     async def test_also_in_best_price(self):
         h = Harness(FakeEasee(status="awaiting_start", current=0), production=3000, grid=-2000, charger={**EASEE, "phases": "mono_tri"})
@@ -751,7 +779,9 @@ class CheckTests(unittest.IsolatedAsyncioTestCase):
         sent = station.sent()
         self.assertEqual(sent[0], "1_phase")
         self.assertIn("3_phase", sent)
-        self.assertLess(sent.index("pause"), sent.index("3_phase"))
+        # Switched while it charges: the only pause is the stop at the end
+        self.assertLess(sent.index("3_phase"), sent.index("pause"))
+        self.assertEqual(sent.count("pause"), 1)
         # Left choosing its phases, its current as it was
         self.assertEqual(sent[-2:], ["0 A", "auto_phase"])
         self.assertTrue(any("1386 W attendus" in text for _, text in steps))

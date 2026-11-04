@@ -3,7 +3,7 @@ step with the driver of its brand, each step checked on its entities, and the re
 
 The car must be plugged in and not charging. Steps: the entities, the status, 6 A, start, a higher current, back to the
 lowest, stop, and its current put back as it was. A station that switches between one and three phases (Mono/Tri, a driver
-that can) starts on one phase, then is paused, switched to three and started again, its power checked on each, and is left
+that can) starts on one phase, then is switched to three while it charges (the station switches by itself), its power checked on each, and is left
 choosing its phases itself. Every step waits for the station to follow (its cloud or OCPP can take a while), and the test
 stops at the first step that fails, the charge stopped.
 """
@@ -171,19 +171,14 @@ async def run_check(hass: HomeAssistant, driver: ChargerDriver, name: str, low: 
             return steps
         say(True, f"Retour à {low} A suivi")
 
-        # 8. One phase to three, as the control does it: paused, switched, started again
+        # 8. One phase to three, as the control does it: switched while it charges, the station switching by itself
         if switchable:
-            await driver.stop()
-            if not await wait(lambda: not driver.is_charging()):
-                say(False, f"Pause avant le passage en triphasé pas suivie : statut {driver.status()}")
-                return steps
             await driver.set_phases(3)
-            say(True, "Pause, puis triphasé demandé")
-            await driver.start()
+            say(True, "Triphasé demandé pendant la charge")
             if not await wait(lambda: driver.is_running()):
-                say(False, f"Reprise en triphasé pas suivie : statut {driver.status()}")
+                say(False, f"La charge ne reprend pas en triphasé : statut {driver.status()}")
                 return steps
-            say(True, f"Charge reprise : statut {driver.status()}")
+            say(True, f"Charge en triphasé : statut {driver.status()}")
             if driver.current_a() != low:
                 await driver.set_current(low)
                 await wait(lambda: driver.current_a() == low)

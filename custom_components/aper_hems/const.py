@@ -118,6 +118,8 @@ CHARGER_COMMANDS_ENTITY = "sensor.aper_hems_commandes_borne"
 # been under the lowest current this long (no stopping at each cloud)
 SUN_START_MINUTES = 3
 SUN_STOP_MINUTES = 5
+# A charge on the sun never started again sooner after the last stop: a station and a car are not switched on and off
+SUN_RESTART_MINUTES = 15
 # A station that switches, on such a surplus: three phases once it reaches the lowest three-phase current with this margin, one
 # when it falls under it by this margin; up to three held SUN_STOP_MINUTES first (each change pauses and starts the charge again),
 # down to one after SUN_PHASE_DOWN_MINUTES (three phases at their lowest current buy from the grid meanwhile)

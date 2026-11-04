@@ -35,6 +35,7 @@ from ..const import (
     START_TRIES,
     SUN_PHASE_DOWN_MINUTES,
     SUN_PHASE_MARGIN_W,
+    SUN_RESTART_MINUTES,
     SUN_START_MINUTES,
     SUN_STOP_MINUTES,
 )
@@ -203,20 +204,17 @@ class ChargerControl:
             if not want and driver.is_charging():
                 reason = (f"Surplus solaire sous le courant minimal depuis {SUN_STOP_MINUTES} min" if was_sun
                           else quarter.get("carLabel") or "Pas de recharge prévue")
-                await send("stop", driver.stop, reason)
+                if await send("stop", driver.stop, reason):
+                    state["stopped_at"] = now
             if not want:
                 await self._free_phases(name, driver, state, test, "Fin de la recharge pilotée")
         # A station that switches between one and three phases: the phases the planning wants, set before a start and when
-        # they change; a charge in progress is paused to take them, and started again at the next minute
+        # they change; a charge in progress is not paused for it, the station switches by itself
         if (want and self._switches(charger, driver) and not driver.is_unplugged() and state["phases"] != phases):
             words = "monophasé" if phases == 1 else "triphasé"
             if await send(f"{phases} phase" + ("s" if phases > 1 else ""), lambda: driver.set_phases(phases),
                           f"Planning en {words}", phases=phases):
                 state["phases"] = phases
-                if driver.is_running():
-                    if await send("stop", driver.stop, f"Passage en {words} : pause, reprise à la minute suivante"):
-                        state["pending_start"] = True
-                    return
         low = int(charger.get(CONF_CHARGER_MIN_CURRENT, DEFAULT_MIN_CURRENT))
         high = int(charger.get(CONF_CHARGER_MAX_CURRENT, DEFAULT_MAX_CURRENT))
         # A start the station did not follow: still waiting to start a while after it (a car waking up shows another status)
@@ -310,18 +308,18 @@ class ChargerControl:
         low = int(charger.get(CONF_CHARGER_MIN_CURRENT, DEFAULT_MIN_CURRENT))
         # Enough sun: the lowest current on one phase for a station that switches
         sun_phases = 1 if self._switches(charger, driver) or charger.get(CONF_CHARGER_PHASES) == PHASES_MONO else 3
-        values = self.live_values()
         running = driver.is_running()
-        # What the car could take: what it takes now (from its setting, on the phases it charges on), what goes to the grid,
-        # what charges the battery, minus what the battery gives
-        car_w = (driver.current_a() or 0) * PHASE_VOLTS * (state["phases"] or phases) if running else 0
-        available = car_w - (values.get("grid") or 0) + (values.get("battery") or 0)
+        available = self._surplus(driver, state["phases"] or phases,
+                                  int(charger.get(CONF_CHARGER_MAX_CURRENT, DEFAULT_MAX_CURRENT)))
         if available >= low * PHASE_VOLTS * sun_phases:
             state["sun_low_since"] = None
             state["sun_since"] = state.get("sun_since") or now
-            # A charge going on (started by the planning, or found charging when Home Assistant starts): on the sun at once
+            # A charge going on (started by the planning, or found charging when Home Assistant starts): on the sun at once;
+            # otherwise once the surplus has lasted, and never less than SUN_RESTART_MINUTES after the last stop
+            stopped_at = state.get("stopped_at")
+            rested = stopped_at is None or now - stopped_at >= timedelta(minutes=SUN_RESTART_MINUTES)
             if not state["sun"] and ((running and state["want"] is not False)
-                                     or now - state["sun_since"] >= timedelta(minutes=SUN_START_MINUTES)):
+                                     or (rested and now - state["sun_since"] >= timedelta(minutes=SUN_START_MINUTES))):
                 state["sun"] = True
         else:
             state["sun_since"] = None
@@ -335,6 +333,19 @@ class ChargerControl:
             state.update(sun_phases=None, sun_phases_since=None)
         return state["sun"]
 
+    def _surplus(self, driver: ChargerDriver, phases: int, high: int) -> float:
+        """What the car could take without buying: what it takes now, plus what goes to the grid, plus what charges the battery
+        (the car first in "Solaire d'abord"), minus what the battery gives (it must not feed the car). What it takes now from its
+        current setting (a power sensor read from the cloud is a minute or two late, and the current would go up and down); never
+        more than the panels make now: a car taking less than its setting (its own charger is smaller, it is nearly full) would
+        otherwise look like a surplus, even at night). Its setting never counted above the highest current of the options: an
+        Easee's dynamic limit can be at 32 A by itself."""
+        values = self.live_values()
+        car_w = min(driver.current_a() or 0, high) * PHASE_VOLTS * phases if driver.is_running() else 0
+        available = car_w - (values.get("grid") or 0) + (values.get("battery") or 0)
+        production = self.production_w()
+        return available if production is None else min(available, max(0.0, production))
+
     async def _set_current(self, data: dict, quarter: dict, driver: ChargerDriver, state: dict, phases: int, low: int, high: int,
                            now: datetime, test: bool, send) -> None:
         """The current: on the solar surplus seen live for a charge on the sun, at the highest for a charge planned on the grid;
@@ -342,13 +353,7 @@ class ChargerControl:
         known = driver.current_a() if not test else state["current"]
         amperes, reason = high, "Pleine puissance"
         if state["sun"]:
-            # What the car could take without buying: what it takes now, plus what goes to the grid, plus what charges the
-            # battery (the car first in "Solaire d'abord"), minus what the battery gives (it must not feed the car). What it
-            # takes now from its current setting: a power sensor read from the cloud is a minute or two late, and the
-            # current would go up and down
-            values = self.live_values()
-            car_w = (driver.current_a() or 0) * PHASE_VOLTS * phases if driver.is_running() else 0
-            available = car_w - (values.get("grid") or 0) + (values.get("battery") or 0)
+            available = self._surplus(driver, phases, high)
             amperes = max(low, min(high, int(available // (PHASE_VOLTS * phases))))
             reason = f"Surplus solaire {round(available)} W"
         # Never above the connection: lowered at once, raised only with a margin left (no going up and down)
