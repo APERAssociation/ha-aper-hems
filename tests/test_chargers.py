@@ -500,6 +500,52 @@ class EaseeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(h.station.sent(), ["10 A"])
 
 
+class PlugInTests(unittest.IsolatedAsyncioTestCase):
+    """A car plugged in outside the planning: the station starting by itself is stopped, the planning asked again."""
+
+    def waiting(self):
+        return planning("wait", source="none", mode="best_price", charger="Easee", phases=3)
+
+    async def test_a_station_charging_by_itself_once_plugged_in_is_stopped(self):
+        h = Harness(FakeEasee(status="disconnected", current=16), charger=EASEE)
+        self.assertFalse(await h.control.tick(self.waiting(), NOW, False))
+        # Plugged in: the station charges at once by itself, the planning wants nothing now
+        h.station.status = "charging"
+        self.assertTrue(await h.control.tick(self.waiting(), NOW + timedelta(minutes=1), False))
+        self.assertIn("pause", h.station.sent())
+        self.assertEqual(h.station.status, "awaiting_start")
+
+    async def test_also_when_it_starts_a_little_after(self):
+        h = Harness(FakeEasee(status="disconnected", current=16), charger=EASEE)
+        await h.tick(self.waiting())
+        h.station.status = "awaiting_start"
+        await h.tick(self.waiting(), minutes=1)
+        self.assertNotIn("pause", h.station.sent())
+        # Two minutes later it starts by itself
+        h.station.status = "charging"
+        await h.tick(self.waiting(), minutes=3)
+        self.assertIn("pause", h.station.sent())
+        self.assertIn(("stop", "La borne a démarré seule au branchement : En attente"), h.log)
+
+    async def test_a_charge_started_by_hand_later_holds(self):
+        h = Harness(FakeEasee(status="disconnected", current=16), charger=EASEE)
+        await h.tick(self.waiting())
+        h.station.status = "awaiting_start"
+        await h.tick(self.waiting(), minutes=1)
+        # Started from its app half an hour later: not stopped
+        h.station.status = "charging"
+        await h.tick(self.waiting(), minutes=30)
+        await h.tick(self.waiting(), minutes=31)
+        self.assertNotIn("pause", h.station.sent())
+
+    async def test_a_charge_planned_is_not_stopped(self):
+        h = Harness(FakeEasee(status="disconnected", current=16), charger=EASEE)
+        await h.tick(planning("charge", charger="Easee"))
+        h.station.status = "charging"
+        await h.tick(planning("charge", charger="Easee"), minutes=1)
+        self.assertNotIn("pause", h.station.sent())
+
+
 class UnplannedSunTests(unittest.IsolatedAsyncioTestCase):
     """"Solaire d'abord" or "Plein au bon prix", whatever the planning says: the surplus seen live is charged."""
 

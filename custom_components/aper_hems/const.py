@@ -120,6 +120,9 @@ SUN_START_MINUTES = 3
 SUN_STOP_MINUTES = 5
 # A charge on the sun never started again sooner after the last stop: a station and a car are not switched on and off
 SUN_RESTART_MINUTES = 15
+# A charge the station starts by itself this long after the car is plugged in, while the planning wants none, is stopped (later
+# on, a charge started by hand from its app holds)
+PLUG_START_WINDOW_MINUTES = 10
 # A station that switches, on such a surplus: three phases once it reaches the lowest three-phase current with this margin, one
 # when it falls under it by this margin; up to three held SUN_STOP_MINUTES first (each change pauses and starts the charge again),
 # down to one after SUN_PHASE_DOWN_MINUTES (three phases at their lowest current buy from the grid meanwhile)

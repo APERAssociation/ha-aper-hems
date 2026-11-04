@@ -20,7 +20,8 @@ from homeassistant.components.recorder.history import state_changes_during_perio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, ServiceCall, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.event import async_track_state_change_event, async_track_time_change, async_track_time_interval
+from homeassistant.helpers.event import (async_call_later, async_track_state_change_event, async_track_time_change,
+                                         async_track_time_interval)
 from homeassistant.util import dt as dt_util
 
 from . import drivers
@@ -1153,7 +1154,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
     async def _drive_chargers() -> None:
         if not chargers_control[CONF_CHARGERS_CONTROL] or testing["on"]:
             return
-        await charger_control.tick(planning["data"], dt_util.utcnow(), bool(chargers_control[CONF_CHARGERS_CONTROL_TEST]))
+        if await charger_control.tick(planning["data"], dt_util.utcnow(), bool(chargers_control[CONF_CHARGERS_CONTROL_TEST])):
+            # A car just plugged in: the planning asked again once the site knows it (the devices are sent within 10 s)
+            planning["quarter"] = None
+            async_call_later(hass, 30, _planning_tick)
 
     # The test of a station (action aper_hems.test_charger): the real station driven step by step, the report in a
     # notification; the control waits meanwhile

@@ -35,6 +35,7 @@ from ..const import (
     START_TRIES,
     SUN_PHASE_DOWN_MINUTES,
     SUN_PHASE_MARGIN_W,
+    PLUG_START_WINDOW_MINUTES,
     SUN_RESTART_MINUTES,
     SUN_START_MINUTES,
     SUN_STOP_MINUTES,
@@ -70,6 +71,8 @@ class ChargerControl:
         # in, the current set, whether nothing more is done until the car is unplugged, and the current of a charge
         # started by hand before the connection lowered it
         self.stations: dict[str, dict] = {}
+        # By station, whether the car was unplugged at the last look, and when it was plugged in (whatever the planning names)
+        self.plugs: dict[str, dict] = {}
 
     def forget(self, name: str) -> None:
         """Starts again from what the planning says now (after a test of the station)."""
@@ -152,8 +155,40 @@ class ChargerControl:
         self.log(name, command, reason, test, status=driver.status(), **extra)
         return True
 
-    async def tick(self, data: dict | None, now: datetime, test: bool) -> None:
-        data = data or {}
+    async def tick(self, data: dict | None, now: datetime, test: bool) -> bool:
+        """Each minute: the station of the planning driven. True when a car has just been plugged in: the planning in hand does
+        not know it yet, it must be asked again."""
+        plugged = self._watch_plugs(now)
+        await self._tick(data or {}, now, test)
+        return plugged
+
+    def _watch_plugs(self, now: datetime) -> bool:
+        """Every station, planned or not: a car plugged in or unplugged starts a new cycle (what the HEMS did before is
+        forgotten, what the planning says now is followed, a charge the station starts by itself is stopped)."""
+        plugged = False
+        for charger in self.chargers:
+            name = charger.get(CONF_NAME)
+            driver = self.driver_factory(self.hass, charger, charger.get(CONF_CHARGER_BRAND))
+            if driver is None or driver.status() is None:
+                continue
+            unplugged = driver.is_unplugged()
+            plug = self.plugs.setdefault(name, {"unplugged": None, "plugged_at": None})
+            if plug["unplugged"] is not None and plug["unplugged"] != unplugged:
+                state = self.stations.get(name)
+                if state is not None:
+                    if unplugged and state["blocked"]:
+                        self.log(name, "nouveau cycle", "Voiture débranchée", False, status=driver.status())
+                    state.update(want=None, pending_start=False, blocked=False, manual=None, started_at=None, start_tries=0)
+                if not unplugged:
+                    plug["plugged_at"] = now
+                    plugged = True
+                    self.log(name, "branchée", "Voiture branchée : planning redemandé", False, status=driver.status())
+                else:
+                    plug["plugged_at"] = None
+            plug["unplugged"] = unplugged
+        return plugged
+
+    async def _tick(self, data: dict, now: datetime, test: bool) -> None:
         found = self._station(data, now)
         if found is None:
             return
@@ -195,6 +230,17 @@ class ChargerControl:
             state["want"] = want
             return
 
+        # Just plugged in, no charge wanted, and the station charging by itself: stopped once (a charge started later by hand
+        # from its app holds)
+        plug = self.plugs.get(name) or {}
+        if (not want and plug.get("plugged_at") is not None and driver.is_charging()
+                and now - plug["plugged_at"] <= timedelta(minutes=PLUG_START_WINDOW_MINUTES)):
+            plug["plugged_at"] = None
+            state["want"] = False
+            await send("stop", driver.stop, "La borne a démarré seule au branchement : "
+                       + (quarter.get("carLabel") or "pas de recharge prévue maintenant"))
+            await self._free_phases(name, driver, state, test, "Fin de la recharge pilotée")
+            return
         # On / off: only when the planning changes its mind (a manual change holds until then)
         if want != state["want"]:
             state["want"] = want
