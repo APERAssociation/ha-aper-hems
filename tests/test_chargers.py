@@ -500,6 +500,31 @@ class EaseeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(h.station.sent(), ["10 A"])
 
 
+class GapTests(unittest.IsolatedAsyncioTestCase):
+    """A planned charge going on, the planning waiting for a single quarter of an hour (the battery taking the connection)."""
+
+    @staticmethod
+    def gap(next_car):
+        data = planning("charge")
+        data["quarters"][1].update(car="wait", carSource="none", carLabel="En attente")
+        data["quarters"][2].update(car=next_car, carSource="grid" if next_car == "charge" else "none")
+        return data
+
+    async def test_a_single_quarter_waiting_does_not_stop_a_charge(self):
+        h = Harness(FakeWallbox("Preparing"))
+        await h.tick(planning("charge"))
+        self.assertEqual(h.station.status, "Charging")
+        await h.tick(self.gap("charge"), minutes=1)
+        self.assertNotIn("stop", h.commands())
+        self.assertEqual(h.station.status, "Charging")
+
+    async def test_it_stops_when_the_planning_waits_longer(self):
+        h = Harness(FakeWallbox("Preparing"))
+        await h.tick(planning("charge"))
+        await h.tick(self.gap("wait"), minutes=1)
+        self.assertIn(("stop", "En attente"), h.log)
+
+
 class PlugInTests(unittest.IsolatedAsyncioTestCase):
     """A car plugged in outside the planning: the station starting by itself is stopped, the planning asked again."""
 

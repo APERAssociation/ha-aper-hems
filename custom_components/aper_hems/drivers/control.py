@@ -162,6 +162,18 @@ class ChargerControl:
         await self._tick(data or {}, now, test)
         return plugged
 
+    @staticmethod
+    def _grid_charge(quarter: dict | None) -> bool:
+        """A quarter of an hour that charges the car from the grid (the planning decides those; the sun is followed live)."""
+        return quarter is not None and quarter.get("car") == "charge" and quarter.get("carSource") != "solar"
+
+    @staticmethod
+    def _next_quarter(data: dict, quarter: dict) -> dict | None:
+        start = parse_time(quarter.get("start"))
+        if start is None:
+            return None
+        return next((q for q in data.get("quarters", []) if parse_time(q.get("start")) == start + timedelta(minutes=15)), None)
+
     def _watch_plugs(self, now: datetime) -> bool:
         """Every station, planned or not: a car plugged in or unplugged starts a new cycle (what the HEMS did before is
         forgotten, what the planning says now is followed, a charge the station starts by itself is stopped)."""
@@ -195,7 +207,13 @@ class ChargerControl:
         name, charger, driver, quarter, state, phases = found
         # The planning decides the charges from the grid; the sun is followed on the live values alone (a quarter planned on the
         # sun charges only if the live surplus is there)
-        planned = quarter["car"] == "charge" and quarter.get("carSource") != "solar"
+        planned = self._grid_charge(quarter)
+        # A charge from the grid going on is not stopped for a single quarter of an hour when the planning charges again the next
+        # one (the battery taking the connection for a while, the house a little higher): stopping and starting again wears the
+        # station; meanwhile the connection's limit lowers its current
+        if (not planned and state["want"] is True and not state["sun"] and driver.is_running()
+                and self._grid_charge(self._next_quarter(data, quarter))):
+            planned = True
         was_sun = state["sun"]
         sun = self._sun(data, quarter, charger, driver, state, phases, now, planned)
         want = planned or sun
