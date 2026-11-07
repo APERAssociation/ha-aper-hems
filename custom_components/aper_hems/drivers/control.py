@@ -275,6 +275,9 @@ class ChargerControl:
             if not want and driver.is_charging():
                 reason = (f"Surplus solaire sous le courant minimal depuis {SUN_STOP_MINUTES} min" if was_sun
                           else quarter.get("carLabel") or "Pas de recharge prévue")
+                if was_sun and state.get("sun_floor"):
+                    reason = (f"Soleil sous le talon ({round(float(data.get('houseBaseKw') or 0) * 1000)} W) "
+                              f"depuis {SUN_STOP_MINUTES} min")
                 if await send("stop", driver.stop, reason):
                     state["stopped_at"] = now
             if not want:
@@ -305,6 +308,15 @@ class ChargerControl:
                 # Its current first: a station starts at the current it had, the whole surplus (or more) bought for a minute
                 await self._set_current(data, quarter, driver, state, phases, low, high, now, test, send)
                 reason = "Charger VE" if planned else "Surplus solaire imprévu"
+                if planned and quarter.get("carLabel"):
+                    reason = f"Planning : {quarter['carLabel']} ({quarter.get('carCurrentA') or high} A, réseau)"
+                elif not planned:
+                    production = self.production_w()
+                    surplus = self._surplus(driver, phases, high)
+                    reason = (f"Surplus solaire imprévu : soleil {round(production or 0)} W, surplus {round(surplus)} W"
+                              if not state.get("sun_floor") else
+                              f"Soleil {round(production or 0)} W au-dessus du talon "
+                              f"{round(float(data.get('houseBaseKw') or 0) * 1000)} W (surplus {round(surplus)} W)")
                 if retry:
                     reason = f"Nouvel essai : la borne n'a pas démarré (statut {status})"
                 if await send("start", driver.start, reason):
@@ -434,9 +446,11 @@ class ChargerControl:
         """The current: on the solar surplus seen live for a charge on the sun, at the highest for a charge planned on the grid;
         never above the connection."""
         known = driver.current_a() if not test else state["current"]
-        amperes, reason = high, "Pleine puissance"
+        amperes, reason = high, "Pleine puissance (charge sur le réseau planifiée)"
+        surplus_w = None
         if state["sun"]:
             available = self._surplus(driver, phases, high)
+            surplus_w = round(available)
             amperes = max(low, min(high, int(available // (PHASE_VOLTS * phases))))
             reason = f"Surplus solaire {round(available)} W"
             if state.get("sun_floor") and available < low * PHASE_VOLTS * phases:
@@ -451,7 +465,10 @@ class ChargerControl:
                 return
             reason = self._limit_reason()
         if known is None or abs(known - amperes) >= 1:
-            if await send(f"{amperes} A", lambda: driver.set_current(amperes), reason, current_a=amperes):
+            extra = {"current_a": amperes, "phases": phases}
+            if surplus_w is not None:
+                extra["surplus_w"] = surplus_w
+            if await send(f"{amperes} A", lambda: driver.set_current(amperes), reason, **extra):
                 state["current"] = amperes
 
     def battery_advance_kwh(self, data: dict | None, now: datetime) -> float | None:

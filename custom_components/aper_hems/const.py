@@ -189,6 +189,10 @@ DEVICES_HEARTBEAT_SECONDS = 300
 # The planning of the HEMS by quarter of an hour (today and tomorrow), fetched at the start of each quarter of an hour with the
 # values of that moment (the best plan for the real conditions: the level of the battery, the sun and the house then)
 PLANNING_API_URL = f"{API_BASE_URL}/api/energydata/planning?days=2"
+# The log of the HEMS: what the plugin commanded (stations, battery), why, and the figures of that moment, sent every minute
+# (kept 5 days on the site, for the admins); at most this many waiting when the site does not answer
+LOGS_API_URL = f"{API_BASE_URL}/api/energydata/logs"
+LOGS_MAX_WAITING = 500
 # Live values for the cockpit: a WebSocket kept open to the site, which says when a cockpit is watching
 # ("watch" message). Values are then sent at each change (at most once a second) and every 10 s anyway.
 LIVE_WS_URL = "wss://aper-association.ch/api/energydata/live"

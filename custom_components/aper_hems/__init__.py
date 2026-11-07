@@ -104,6 +104,8 @@ from .const import (
     DEVICES_API_URL,
     DEVICES_HEARTBEAT_SECONDS,
     DEVICES_MIN_SECONDS,
+    LOGS_API_URL,
+    LOGS_MAX_WAITING,
     DOMAIN,
     LIVE_HEARTBEAT_SECONDS,
     LIVE_RECONNECT_MAX_SECONDS,
@@ -1041,6 +1043,48 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
             **common,
         })
 
+    # The log of the HEMS: each command (stations, battery) with its reason and the live figures of that moment, sent to the
+    # site every minute (kept 5 days there, for the admins: to understand its decisions)
+    hems_logs: list[dict] = []
+    hems_logs_state = {"busy": False}
+
+    def _hems_log(category: str, action: str, reason: str | None, device: str | None = None, test: bool = False,
+                  **details) -> None:
+        values = _live_values()
+        figures = {
+            "productionW": values.get("production"),
+            "gridW": values.get("grid"),
+            "batteryW": values.get("battery"),
+            "batterySoc": values.get("batterySoc"),
+        }
+        figures.update({key: value for key, value in details.items() if value is not None})
+        figures = {key: (round(value, 1) if isinstance(value, float) else value) for key, value in figures.items() if value is not None}
+        hems_logs.append({"at": dt_util.utcnow().isoformat(), "category": category, "action": action, "device": device,
+                          "reason": reason, "test": test, "details": figures})
+        del hems_logs[:-LOGS_MAX_WAITING]
+
+    async def _send_hems_logs() -> None:
+        if not hems_logs or hems_logs_state["busy"]:
+            return
+        hems_logs_state["busy"] = True
+        batch = hems_logs[:]
+        try:
+            async with session.post(LOGS_API_URL, json=batch, headers=headers, timeout=aiohttp.ClientTimeout(total=20)) as resp:
+                if resp.status == 200:
+                    del hems_logs[:len(batch)]
+                else:
+                    _LOGGER.debug("Logs: HTTP %s", resp.status)
+                    # An old site without the log: nothing kept
+                    if resp.status in (404, 405):
+                        del hems_logs[:len(batch)]
+        except asyncio.CancelledError:
+            raise
+        except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as err:
+            # Tried again in a minute
+            _LOGGER.debug("Logs not sent: %s", type(err).__name__)
+        finally:
+            hems_logs_state["busy"] = False
+
     # The control of the battery: the mode entity set to the option of the source of the quarter of an hour in progress, only
     # when it changes (a manual change holds until the next one); in test mode, only written into the commands sensor
     control = {**CONTROL_DEFAULTS, **{k: v for k, v in entry.options.items() if k in CONTROL_DEFAULTS or k == CONF_CONTROL_MODE_ENTITY}}
@@ -1087,6 +1131,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
         option = control_options.get(source)
         if not option or option == control_state["last"]:
             return
+        planned = next((q.get("sourceLabel") for q in data.get("quarters", [])
+                        if (start := dt_util.parse_datetime(q["start"])) is not None and start <= now < start + timedelta(minutes=15)), None)
+        advance = charger_control.battery_advance_kwh(data, now) if data else None
         control_state["last"] = option
         test = bool(control[CONF_CONTROL_TEST])
         if not test:
@@ -1096,7 +1143,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
             except Exception as err:  # noqa: BLE001 - an unknown option or a missing entity must not stop the plugin
                 control_state["last"] = None
                 _LOGGER.warning("Battery control: %s not set to %s: %s", control_entity, option, err)
+                _hems_log("battery", f"{option} refusé", str(err) or type(err).__name__, control_entity, test, source=source)
                 return
+        _hems_log("battery", option, reason, control_entity, test, source=source, planned=planned,
+                  advanceKwh=round(advance, 2) if advance is not None else None)
         hass.states.async_set(CONTROL_COMMANDS_ENTITY, option, {
             "friendly_name": "Commandes APER HEMS",
             "icon": "mdi:battery-sync",
@@ -1112,6 +1162,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
     chargers_control = {**CHARGERS_CONTROL_DEFAULTS, **{k: v for k, v in entry.options.items() if k in CHARGERS_CONTROL_DEFAULTS}}
 
     def _charger_log(name: str, command: str, reason: str, test: bool, **extra) -> None:
+        _hems_log("ev", command, reason, name, test, status=extra.get("status"), currentA=extra.get("current_a"),
+                  phases=extra.get("phases"), surplusW=extra.get("surplus_w"))
         hass.states.async_set(CHARGER_COMMANDS_ENTITY, command, {
             "friendly_name": "Commandes APER HEMS (borne)",
             "icon": "mdi:ev-station",
@@ -1252,6 +1304,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
         # The stations first: what the battery does follows a charge on the sun
         await _drive_chargers()
         await _control()
+        await _send_hems_logs()
 
     entry.async_on_unload(async_track_time_interval(hass, _planning_tick, timedelta(minutes=1)))
     # Right at the start of each quarter of an hour (a few seconds after, the live values of that moment)

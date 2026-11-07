@@ -586,7 +586,7 @@ class UnplannedSunTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(h.station.sent(), [])
         await h.tick(self.waiting(), minutes=3)
         self.assertEqual(h.station.sent(), ["1_phase", "8 A", "resume"])
-        self.assertIn(("start", "Surplus solaire imprévu"), h.log)
+        self.assertIn(("start", "Surplus solaire imprévu : soleil 3000 W, surplus 2000 W"), h.log)
 
     async def test_a_big_surplus_is_charged_on_three_phases(self):
         # 6000 W exported: three phases (6 A × 3 = 4157 W fits), 8 A (5543 W)
