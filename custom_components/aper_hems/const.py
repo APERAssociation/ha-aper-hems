@@ -128,6 +128,13 @@ PLUG_START_WINDOW_MINUTES = 10
 # down to one after SUN_PHASE_DOWN_MINUTES (three phases at their lowest current buy from the grid meanwhile)
 SUN_PHASE_MARGIN_W = 300
 SUN_PHASE_DOWN_MINUTES = 1
+# "Solaire d'abord" with the house's base load sent by the site (the car under its level wanted): a charge starts once the sun
+# makes more than the base load for SUN_START_MINUTES and keeps at least its lowest current while it does (none of the sun
+# exported, what it does not give is bought), stopped once under it for SUN_STOP_MINUTES. Meanwhile the battery of the house gives
+# the difference only once it is ahead of the planning by SUN_BATTERY_START_KWH, until it is ahead by SUN_BATTERY_STOP_KWH only
+# (no going back and forth); otherwise it keeps its energy ("Consommer sur le grid")
+SUN_BATTERY_START_KWH = 7
+SUN_BATTERY_STOP_KWH = 5
 # A car that wants no energy this long (SuspendedEV) is full or follows its own schedule: nothing more until it is
 # unplugged. Shorter, it is only waking up after a start
 DONE_AFTER_MINUTES = 5

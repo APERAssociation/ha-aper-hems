@@ -1078,6 +1078,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
         # again within 5 minutes, from this level)
         if source == "charge_grid" and _batteries_full():
             source, reason = "solar", "Batterie pleine"
+        # A car charging on the sun above the house's base load: the battery gives it the difference only when it is well ahead
+        # of the planning, otherwise it keeps its energy (the grid gives what the sun does not)
+        if source in ("solar", "discharge", "grid_only") and chargers_control[CONF_CHARGERS_CONTROL] and not testing["on"]:
+            override = charger_control.battery_source(data, now)
+            if override is not None:
+                source, reason = override
         option = control_options.get(source)
         if not option or option == control_state["last"]:
             return
@@ -1243,8 +1249,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: AperHemsConfigEntry) -> 
             finally:
                 planning["busy"] = False
         _planning_write()
-        await _control()
+        # The stations first: what the battery does follows a charge on the sun
         await _drive_chargers()
+        await _control()
 
     entry.async_on_unload(async_track_time_interval(hass, _planning_tick, timedelta(minutes=1)))
     # Right at the start of each quarter of an hour (a few seconds after, the live values of that moment)

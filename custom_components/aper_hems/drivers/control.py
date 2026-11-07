@@ -4,7 +4,9 @@ The station of the car the planning charges (its name in the planning) is driven
 when the quarter of an hour in progress says "charge", stopped otherwise, only when the planning changes its mind (a manual
 change holds until then); a status that does not allow a start, or a car that wants no more energy, stops everything until
 the car is unplugged. Its current: on the solar surplus in "Solaire d'abord" (quarters planned on the sun), down to its
-lowest current; at its highest otherwise, or without sun for a while. Never more than the home may take from the grid
+lowest current (with the house's base load, kept at its lowest current while the sun makes more than the base load, the
+battery of the house giving the difference only when it is well ahead of the planning: battery_source); at its highest
+otherwise, or without sun for a while. Never more than the home may take from the grid
 (its connection): lowered as soon as the import goes above it (protect), raised again every minute when it comes down.
 
 Kept apart from Home Assistant (everything it reads comes in) so that it can be tested.
@@ -33,6 +35,8 @@ from ..const import (
     PHASES_TRI,
     START_CHECK_MINUTES,
     START_TRIES,
+    SUN_BATTERY_START_KWH,
+    SUN_BATTERY_STOP_KWH,
     SUN_PHASE_DOWN_MINUTES,
     SUN_PHASE_MARGIN_W,
     PLUG_START_WINDOW_MINUTES,
@@ -73,6 +77,8 @@ class ChargerControl:
         self.stations: dict[str, dict] = {}
         # By station, whether the car was unplugged at the last look, and when it was plugged in (whatever the planning names)
         self.plugs: dict[str, dict] = {}
+        # Whether the battery of the house is far enough ahead of the planning to give to a car charging on the sun
+        self.battery_ahead = False
 
     def forget(self, name: str) -> None:
         """Starts again from what the planning says now (after a test of the station)."""
@@ -99,6 +105,7 @@ class ChargerControl:
         state = self.stations.setdefault(name, {"want": None, "pending_start": False, "current": None, "blocked": False,
                                                 "done_since": None, "manual": None, "phases": None, "sun": False, "sun_since": None,
                                                 "sun_low_since": None, "sun_phases": None, "sun_phases_since": None,
+                                                "sun_floor": False,
                                                 "started_at": None, "start_tries": 0})
         kind = charger.get(CONF_CHARGER_PHASES)
         # Its phases: three for a three-phase station (6 A = 4.2 kW), one for a single-phase one, as planned for a switchable one
@@ -365,9 +372,11 @@ class ChargerControl:
         """A charge on the solar surplus seen live (the export, what the car takes, the battery), whatever the planning says,
         when no charge from the grid is planned, the car plugged in, in "Solaire d'abord" or "Bon tarif et soleil" (the sun is
         free). Started once the surplus has reached the lowest current for SUN_START_MINUTES (at once for a charge already
-        going on: started by the planning, or on the sun before), stopped once it has been under it for SUN_STOP_MINUTES."""
+        going on: started by the planning, or on the sun before), stopped once it has been under it for SUN_STOP_MINUTES. In
+        "Solaire d'abord" with the house's base load (solarMinimum: the car under its level wanted), the sun above the base load
+        instead of the surplus (its lowest current kept, the rest bought)."""
         if planned or data.get("carMode") not in ("solar_first", "best_price") or driver.is_unplugged():
-            state.update(sun=False, sun_since=None, sun_low_since=None, sun_phases=None, sun_phases_since=None)
+            state.update(sun=False, sun_since=None, sun_low_since=None, sun_phases=None, sun_phases_since=None, sun_floor=False)
             return False
         low = int(charger.get(CONF_CHARGER_MIN_CURRENT, DEFAULT_MIN_CURRENT))
         # Enough sun: the lowest current on one phase for a station that switches
@@ -375,7 +384,17 @@ class ChargerControl:
         running = driver.is_running()
         available = self._surplus(driver, state["phases"] or phases,
                                   int(charger.get(CONF_CHARGER_MAX_CURRENT, DEFAULT_MAX_CURRENT)))
-        if available >= low * PHASE_VOLTS * sun_phases:
+        # "Solaire d'abord" with the house's base load, the car under its level wanted: the sun above the base load is enough (its
+        # lowest current kept, what the sun does not give bought); otherwise the surplus must reach the lowest current
+        base_kw = data.get("houseBaseKw")
+        floor = data.get("carMode") == "solar_first" and base_kw is not None and bool(quarter.get("solarMinimum"))
+        if floor:
+            production = self.production_w()
+            enough = production is not None and production > float(base_kw) * 1000
+        else:
+            enough = available >= low * PHASE_VOLTS * sun_phases
+        state["sun_floor"] = floor
+        if enough:
             state["sun_low_since"] = None
             state["sun_since"] = state.get("sun_since") or now
             # A charge going on (started by the planning, or found charging when Home Assistant starts): on the sun at once;
@@ -420,6 +439,8 @@ class ChargerControl:
             available = self._surplus(driver, phases, high)
             amperes = max(low, min(high, int(available // (PHASE_VOLTS * phases))))
             reason = f"Surplus solaire {round(available)} W"
+            if state.get("sun_floor") and available < low * PHASE_VOLTS * phases:
+                reason = f"Soleil au-dessus du talon : courant minimal (surplus {round(max(0.0, available))} W)"
         # Never above the connection: lowered at once, raised only with a margin left (no going up and down)
         cap = self._grid_cap(driver, phases, 0)
         if cap is not None and (known is None or amperes > known):
@@ -432,3 +453,42 @@ class ChargerControl:
         if known is None or abs(known - amperes) >= 1:
             if await send(f"{amperes} A", lambda: driver.set_current(amperes), reason, current_a=amperes):
                 state["current"] = amperes
+
+    def battery_advance_kwh(self, data: dict | None, now: datetime) -> float | None:
+        """How far the battery of the house is ahead of the planning now (kWh, negative: behind): its live level against the
+        one the planning expected at this minute (between the start and the end of the quarter of an hour), × its capacity."""
+        data = data or {}
+        capacity = data.get("batteryCapacityKwh")
+        soc = self.live_values().get("batterySoc")
+        if not capacity or soc is None:
+            return None
+        quarters = data.get("quarters", [])
+        for i, q in enumerate(quarters):
+            start = parse_time(q.get("start"))
+            if start is None or not start <= now < start + timedelta(minutes=15) or q.get("plannedSoc") is None:
+                continue
+            before = quarters[i - 1].get("plannedSoc") if i > 0 else None
+            before = q["plannedSoc"] if before is None else before
+            expected = before + (q["plannedSoc"] - before) * ((now - start) / timedelta(minutes=15))
+            return (float(soc) - expected) * float(capacity) / 100
+        return None
+
+    def battery_source(self, data: dict | None, now: datetime) -> tuple[str, str] | None:
+        """While the station of the planning charges on the sun above the house's base load (its lowest current kept): what the
+        battery of the house does, as a source of the planning, with the reason; None otherwise (the planning decides). It gives
+        the difference ("solar": self-consumption) once it is SUN_BATTERY_START_KWH ahead of the planning, until it is only
+        SUN_BATTERY_STOP_KWH ahead; otherwise it keeps its energy ("grid_only"), the grid gives what the sun does not."""
+        state = self.stations.get((data or {}).get("chargerName"))
+        if not state or not state.get("sun") or not state.get("sun_floor") or state.get("blocked"):
+            return None
+        advance = self.battery_advance_kwh(data, now)
+        if advance is None:
+            self.battery_ahead = False
+        elif advance >= SUN_BATTERY_START_KWH:
+            self.battery_ahead = True
+        elif advance < SUN_BATTERY_STOP_KWH:
+            self.battery_ahead = False
+        if self.battery_ahead:
+            return "solar", f"Voiture au soleil : batterie en avance de {advance:.1f} kWh, elle donne la différence"
+        ahead = "" if advance is None else f" (avance {advance:.1f} kWh)"
+        return "grid_only", f"Voiture au soleil au courant minimal : la batterie garde son énergie{ahead}"

@@ -172,15 +172,16 @@ def easee_factory(hass, charger, brand):
 class Harness:
     """The control on a fake station (a Wallbox unless told), with the sun and the grid it reads."""
 
-    def __init__(self, station, production=0.0, grid=0.0, battery=0.0, grid_max_w=None, charger=None):
+    def __init__(self, station, production=0.0, grid=0.0, battery=0.0, grid_max_w=None, charger=None, soc=None):
         self.station = station
         self.production = production
         self.grid = grid
         self.battery = battery
+        self.soc = soc
         self.log: list[tuple[str, str]] = []
         self.control = ChargerControl(
             station, [charger or CHARGER],
-            live_values=lambda: {"grid": self.grid, "battery": self.battery},
+            live_values=lambda: {"grid": self.grid, "battery": self.battery, "batterySoc": self.soc},
             production_w=lambda: self.production,
             log=lambda name, command, reason, test, **extra: self.log.append((command, reason)),
             grid_max_w=grid_max_w, driver_factory=easee_factory)
@@ -699,6 +700,81 @@ class UnplannedSunTests(unittest.IsolatedAsyncioTestCase):
         h.station.status = "disconnected"
         await h.tick(self.waiting(), minutes=4)
         self.assertEqual(h.station.phase_mode, "auto_phase")
+
+
+class SunFloorTests(unittest.IsolatedAsyncioTestCase):
+    """"Solaire d'abord" with the house's base load: the sun above it is enough, the lowest current kept, the battery of the
+    house giving the difference only when it is well ahead of the planning."""
+
+    @staticmethod
+    def sunny(planned_soc=50.0, minute=0):
+        data = planning("wait", source="none", mode="solar_first", charger="Easee", phases=0, solar_allowed=True,
+                        generated=NOW + timedelta(minutes=minute))
+        data.update(houseBaseKw=0.4, batteryCapacityKwh=20)
+        for q in data["quarters"]:
+            q.update(solarMinimum=True, plannedSoc=planned_soc)
+        return data
+
+    async def test_starts_at_its_lowest_current_once_the_sun_passes_the_base_load(self):
+        # 700 W of sun, 300 W exported: far from 6 A on one phase (1386 W), but above the base load of 400 W
+        h = Harness(FakeEasee(status="awaiting_start", current=0), production=700, grid=-300, charger={**EASEE, "phases": "mono_tri"})
+        for minute in range(4):
+            await h.tick(self.sunny(), minutes=minute)
+        self.assertEqual(h.station.sent(), ["1_phase", "6 A", "7 A", "resume"])
+
+    async def test_without_the_base_load_the_surplus_must_reach_the_lowest_current(self):
+        h = Harness(FakeEasee(status="awaiting_start", current=0), production=700, grid=-300, charger={**EASEE, "phases": "mono_tri"})
+        data = self.sunny()
+        data.pop("houseBaseKw")
+        for minute in range(6):
+            await h.tick(data, minutes=minute)
+        self.assertEqual(h.station.sent(), [])
+
+    async def test_never_stopped_while_the_sun_passes_the_base_load(self):
+        h = Harness(FakeEasee(status="awaiting_start", current=0), production=700, grid=-300, charger={**EASEE, "phases": "mono_tri"})
+        for minute in range(4):
+            await h.tick(self.sunny(minute=minute), minutes=minute)
+        # The car at 6 A (1386 W) buys 700 W: kept, for an hour
+        h.grid = 700
+        for minute in range(4, 64):
+            await h.tick(self.sunny(minute=minute), minutes=minute)
+        self.assertNotIn("pause", h.station.sent())
+        self.assertEqual(h.station.current, 6)
+        # The sun under the base load: stopped after 5 minutes
+        h.production, h.grid = 300, 1500
+        for minute in range(64, 70):
+            await h.tick(self.sunny(minute=minute), minutes=minute)
+        self.assertIn("pause", h.station.sent())
+
+    async def test_the_battery_keeps_its_energy_unless_it_is_well_ahead(self):
+        # Planned at 50 % (20 kWh): 30 % ahead = 6 kWh, not enough to give; 40 % = 8 kWh, it gives; down to 30 % (6 kWh) it
+        # still gives, under 25 % (5 kWh) it keeps its energy again
+        h = Harness(FakeEasee(status="awaiting_start", current=0), production=700, grid=-300, charger={**EASEE, "phases": "mono_tri"},
+                    soc=80)
+        for minute in range(4):
+            await h.tick(self.sunny(), minutes=minute)
+        now = NOW + timedelta(minutes=4)
+        self.assertEqual(h.control.battery_source(self.sunny(), now)[0], "grid_only")
+        h.soc = 90
+        self.assertEqual(h.control.battery_source(self.sunny(), now)[0], "solar")
+        h.soc = 80
+        self.assertEqual(h.control.battery_source(self.sunny(), now)[0], "solar")
+        h.soc = 74
+        self.assertEqual(h.control.battery_source(self.sunny(), now)[0], "grid_only")
+
+    async def test_the_planning_decides_the_battery_without_a_charge_on_the_sun(self):
+        h = Harness(FakeEasee(status="awaiting_start", current=0), production=0, grid=500, charger={**EASEE, "phases": "mono_tri"}, soc=90)
+        await h.tick(self.sunny())
+        self.assertIsNone(h.control.battery_source(self.sunny(), NOW))
+
+    async def test_the_car_at_its_level_wanted_takes_only_the_surplus(self):
+        h = Harness(FakeEasee(status="awaiting_start", current=0), production=700, grid=-300, charger={**EASEE, "phases": "mono_tri"})
+        data = self.sunny()
+        for q in data["quarters"]:
+            q["solarMinimum"] = False
+        for minute in range(6):
+            await h.tick(data, minutes=minute)
+        self.assertEqual(h.station.sent(), [])
 
 
 class GridLimitTests(unittest.IsolatedAsyncioTestCase):
