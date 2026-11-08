@@ -24,6 +24,8 @@ class ChargerDriver:
 
     # The statuses (as its status entity gives them, in lower case) in which a charge may be started; empty: any
     START_STATUSES: tuple[str, ...] = ()
+    # A charge that ended by itself, to be started again (none unless the brand says)
+    RESTART_STATUSES: tuple[str, ...] = ()
     # The statuses of a charge in progress (started, the car taking energy or not), and of one actually charging
     CHARGING_STATUSES: tuple[str, ...] = ()
     RUNNING_STATUSES: tuple[str, ...] = ()
@@ -116,6 +118,8 @@ class WallboxDriver(ChargerDriver):
     once the car wants no more energy (SuspendedEV), nothing more is tried until the car is unplugged (Available)."""
 
     START_STATUSES = ("preparing", "finishing", "suspendedevse")
+    # A charge that ended by itself, the car still plugged in (no transaction any more)
+    RESTART_STATUSES = ("preparing", "finishing")
     CHARGING_STATUSES = ("charging", "suspendedev", "suspendedevse")
     RUNNING_STATUSES = ("charging",)
     UNPLUGGED_STATUSES = ("available",)

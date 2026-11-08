@@ -106,7 +106,7 @@ class ChargerControl:
                                                 "done_since": None, "manual": None, "phases": None, "sun": False, "sun_since": None,
                                                 "sun_low_since": None, "sun_phases": None, "sun_phases_since": None,
                                                 "sun_floor": False,
-                                                "started_at": None, "start_tries": 0})
+                                                "started_at": None, "start_tries": 0, "ran": False, "restarts": 0})
         kind = charger.get(CONF_CHARGER_PHASES)
         # Its phases: three for a three-phase station (6 A = 4.2 kW), one for a single-phase one, as planned for a switchable one
         phases = 3 if kind == PHASES_TRI else 1 if kind == PHASES_MONO else int(quarter.get("carPhases") or 3)
@@ -197,7 +197,8 @@ class ChargerControl:
                 if state is not None:
                     if unplugged and state["blocked"]:
                         self.log(name, "nouveau cycle", "Voiture débranchée", False, status=driver.status())
-                    state.update(want=None, pending_start=False, blocked=False, manual=None, started_at=None, start_tries=0)
+                    state.update(want=None, pending_start=False, blocked=False, manual=None, started_at=None, start_tries=0,
+                                 ran=False, restarts=0)
                 if not unplugged:
                     plug["plugged_at"] = now
                     plugged = True
@@ -292,10 +293,25 @@ class ChargerControl:
         low = int(charger.get(CONF_CHARGER_MIN_CURRENT, DEFAULT_MIN_CURRENT))
         high = int(charger.get(CONF_CHARGER_MAX_CURRENT, DEFAULT_MAX_CURRENT))
         # A start the station did not follow: still waiting to start a while after it (a car waking up shows another status)
-        retry = False
+        retry = relaunch = False
         if not want or driver.is_running():
             state.update(started_at=None, start_tries=0)
-        elif (not state["pending_start"] and state["started_at"] is not None and driver.can_start()
+        # A charge wanted that ran and ended by itself (the transaction over: Preparing or Finishing for a Wallbox, its switch
+        # still on, so not stopped by hand from its app or Home Assistant, which holds): started again, RESTARTS_MAX times at
+        # most until the car is unplugged (a station that keeps ending it is left alone)
+        if not want:
+            state["ran"] = False
+        elif driver.is_running():
+            state["ran"] = True
+        elif (state["ran"] and not state["pending_start"] and state["started_at"] is None
+                and driver.status() in driver.RESTART_STATUSES and driver.switch_on() is True):
+            state["ran"] = False
+            if state["restarts"] >= START_TRIES:
+                block(f"La recharge s'est arrêtée seule {START_TRIES} fois (statut {status}), rien jusqu'au débranchement")
+                return
+            state.update(pending_start=True, restarts=state["restarts"] + 1)
+            relaunch = True
+        elif (not relaunch and not state["pending_start"] and state["started_at"] is not None and driver.can_start()
                 and now - state["started_at"] >= timedelta(minutes=START_CHECK_MINUTES)):
             if state["start_tries"] >= START_TRIES:
                 block(f"La borne n'a pas démarré après {START_TRIES} essais (statut {status}), rien jusqu'au débranchement")
@@ -319,6 +335,8 @@ class ChargerControl:
                               f"{round(float(data.get('houseBaseKw') or 0) * 1000)} W (surplus {round(surplus)} W)")
                 if retry:
                     reason = f"Nouvel essai : la borne n'a pas démarré (statut {status})"
+                elif relaunch:
+                    reason = f"Relance : la recharge s'est arrêtée seule (statut {status})"
                 if await send("start", driver.start, reason):
                     state.update(pending_start=False, started_at=now, start_tries=state["start_tries"] + 1)
                     # The grid does not show the car yet: its current looked at again at the next minute

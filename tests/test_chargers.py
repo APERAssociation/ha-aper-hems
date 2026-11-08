@@ -245,6 +245,38 @@ class ControlTests(unittest.IsolatedAsyncioTestCase):
             await h.tick(planning("charge"), minutes=minute)
         self.assertEqual(h.station.sent(), ["start"])
 
+    async def test_a_charge_that_ends_by_itself_is_started_again(self):
+        h = Harness(FakeWallbox(status="Preparing"))
+        await h.tick(planning("charge"))
+        await h.tick(planning("charge"), minutes=1)
+        # The transaction ended by the station (its switch still on), the car still plugged in: never tried again before
+        h.station.status = "Preparing"
+        await h.tick(planning("charge"), minutes=2)
+        self.assertEqual(h.station.sent(), ["start", "start"])
+        self.assertEqual(h.station.status, "Charging")
+        self.assertTrue(h.log[-1][1].startswith("Relance"))
+
+    async def test_a_charge_that_keeps_ending_is_left_after_five_relaunches(self):
+        h = Harness(FakeWallbox(status="Preparing"))
+        await h.tick(planning("charge"))
+        for minute in range(1, 16, 2):
+            await h.tick(planning("charge"), minutes=minute)
+            h.station.status = "Preparing"
+            await h.tick(planning("charge"), minutes=minute + 1)
+        self.assertEqual(h.station.sent().count("start"), 6)
+        self.assertIn("attente débranchement", h.commands())
+
+    async def test_a_charge_stopped_by_hand_holds(self):
+        h = Harness(FakeWallbox(status="Preparing"))
+        await h.tick(planning("charge"))
+        await h.tick(planning("charge"), minutes=1)
+        # Stopped from Home Assistant: its switch off
+        h.station.switch = "off"
+        h.station.status = "Finishing"
+        await h.tick(planning("charge"), minutes=2)
+        await h.tick(planning("charge"), minutes=6)
+        self.assertEqual(h.station.sent(), ["start"])
+
     async def test_a_manual_start_holds_until_the_planning_changes(self):
         h = Harness(FakeWallbox(status="Preparing"))
         await h.tick(planning("wait"))
