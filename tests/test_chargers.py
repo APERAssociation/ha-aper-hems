@@ -288,10 +288,20 @@ class ControlTests(unittest.IsolatedAsyncioTestCase):
     async def test_waits_for_the_car_to_be_plugged_in(self):
         h = Harness(FakeWallbox(status="Available", current=6))
         await h.tick(planning("charge"))
-        self.assertEqual(h.station.sent(), ["16 A"])
+        # Nothing on a station without car: its current is set before the start
+        self.assertEqual(h.station.sent(), [])
         h.station.status = "Preparing"
         await h.tick(planning("charge"), minutes=1)
         self.assertEqual(h.station.sent(), ["16 A", "start"])
+
+    async def test_no_car_charging_no_regulation_for_the_connection(self):
+        # A charge planned, the car not plugged in, the house importing a lot (the battery charging on the grid): nothing sent
+        h = Harness(FakeWallbox(status="Available", current=16), grid=9530, grid_max_w=17000)
+        for minute in range(3):
+            h.grid = 9530 + 3000 * minute
+            await h.tick(planning("charge"), minutes=minute)
+            await h.protect(planning("charge"), minutes=minute)
+        self.assertEqual(h.station.sent(), [])
 
     async def test_another_status_blocks_until_unplugged(self):
         h = Harness(FakeWallbox(status="Faulted"))

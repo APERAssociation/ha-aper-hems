@@ -360,6 +360,10 @@ class ChargerControl:
                 if amperes >= state["manual"]:
                     state["manual"] = None
             return
+        # Only a charge actually running is regulated (its live status): a car not plugged in, or plugged in and not charging,
+        # gets its current when it starts (set before the start), not every minute from the planning and the import
+        if not driver.is_running():
+            return
         await self._set_current(data, quarter, driver, state, phases, low, high, now, test, send)
 
     async def _free_phases(self, name: str, driver: ChargerDriver, state: dict, test: bool, reason: str) -> None:
