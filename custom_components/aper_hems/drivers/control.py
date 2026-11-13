@@ -2,8 +2,8 @@
 
 The station of the car the planning charges (its name in the planning) is driven through the driver of its brand: started
 when the quarter of an hour in progress says "charge", stopped otherwise when the planning changes its mind, and a charge
-going on that the settings do not want (started by the station, the car or by hand) stopped after a couple of minutes, again
-every few minutes while it goes on; a status that does not allow a start, or a car that wants no more energy, stops everything until
+going on that the settings do not want (started by the station, the car or by hand) stopped at the next minute, again
+every minute while it goes on; a status that does not allow a start, or a car that wants no more energy, stops everything until
 the car is unplugged. Its current: on the solar surplus in "Solaire d'abord" (quarters planned on the sun), down to its
 lowest current (with the house's base load, kept at its lowest current while the sun makes more than the base load, the
 battery of the house giving the difference only when it is well ahead of the planning: battery_source); at its highest
