@@ -441,7 +441,7 @@ class ChargerControl:
         # "Solaire d'abord" with the house's base load, the car under its level wanted: the sun above the base load is enough (its
         # lowest current kept, what the sun does not give bought); otherwise the surplus must reach the lowest current
         base_kw = data.get("houseBaseKw")
-        floor = data.get("carMode") in ("solar_first", "solar_only") and base_kw is not None and bool(quarter.get("solarMinimum"))
+        floor = data.get("carMode") == "solar_first" and base_kw is not None and bool(quarter.get("solarMinimum"))
         if floor:
             production = self.production_w()
             enough = production is not None and production > float(base_kw) * 1000
