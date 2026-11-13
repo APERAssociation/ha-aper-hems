@@ -813,6 +813,15 @@ class SunFloorTests(unittest.IsolatedAsyncioTestCase):
             await h.tick(self.sunny(), minutes=minute)
         self.assertEqual(h.station.sent(), ["1_phase", "6 A", "7 A", "resume"])
 
+    async def test_solar_only_follows_the_same_rules(self):
+        # "Solaire uniquement": the sun above the base load is enough too, the lowest current kept
+        h = Harness(FakeEasee(status="awaiting_start", current=0), production=700, grid=-300, charger={**EASEE, "phases": "mono_tri"})
+        data = self.sunny()
+        data["carMode"] = "solar_only"
+        for minute in range(4):
+            await h.tick(data, minutes=minute)
+        self.assertEqual(h.station.sent(), ["1_phase", "6 A", "7 A", "resume"])
+
     async def test_without_the_base_load_the_surplus_must_reach_the_lowest_current(self):
         h = Harness(FakeEasee(status="awaiting_start", current=0), production=700, grid=-300, charger={**EASEE, "phases": "mono_tri"})
         data = self.sunny()

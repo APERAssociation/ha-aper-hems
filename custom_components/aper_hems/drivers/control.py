@@ -429,7 +429,7 @@ class ChargerControl:
         going on: started by the planning, or on the sun before), stopped once it has been under it for SUN_STOP_MINUTES. In
         "Solaire d'abord" with the house's base load (solarMinimum: the car under its level wanted), the sun above the base load
         instead of the surplus (its lowest current kept, the rest bought)."""
-        if planned or data.get("carMode") not in ("solar_first", "best_price") or driver.is_unplugged():
+        if planned or data.get("carMode") not in ("solar_first", "solar_only", "best_price") or driver.is_unplugged():
             state.update(sun=False, sun_since=None, sun_low_since=None, sun_phases=None, sun_phases_since=None, sun_floor=False)
             return False
         low = int(charger.get(CONF_CHARGER_MIN_CURRENT, DEFAULT_MIN_CURRENT))
@@ -441,7 +441,7 @@ class ChargerControl:
         # "Solaire d'abord" with the house's base load, the car under its level wanted: the sun above the base load is enough (its
         # lowest current kept, what the sun does not give bought); otherwise the surplus must reach the lowest current
         base_kw = data.get("houseBaseKw")
-        floor = data.get("carMode") == "solar_first" and base_kw is not None and bool(quarter.get("solarMinimum"))
+        floor = data.get("carMode") in ("solar_first", "solar_only") and base_kw is not None and bool(quarter.get("solarMinimum"))
         if floor:
             production = self.production_w()
             enough = production is not None and production > float(base_kw) * 1000
