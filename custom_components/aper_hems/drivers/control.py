@@ -1,8 +1,9 @@
 """The decisions of the control of the charging stations, every minute, from the planning of the HEMS.
 
 The station of the car the planning charges (its name in the planning) is driven through the driver of its brand: started
-when the quarter of an hour in progress says "charge", stopped otherwise, only when the planning changes its mind (a manual
-change holds until then); a status that does not allow a start, or a car that wants no more energy, stops everything until
+when the quarter of an hour in progress says "charge", stopped otherwise when the planning changes its mind, and a charge
+going on that the settings do not want (started by the station, the car or by hand) stopped after a couple of minutes, again
+every few minutes while it goes on; a status that does not allow a start, or a car that wants no more energy, stops everything until
 the car is unplugged. Its current: on the solar surplus in "Solaire d'abord" (quarters planned on the sun), down to its
 lowest current (with the house's base load, kept at its lowest current while the sun makes more than the base load, the
 battery of the house giving the difference only when it is well ahead of the planning: battery_source); at its highest
@@ -44,6 +45,8 @@ from ..const import (
     SUN_RESTART_MINUTES,
     SUN_START_MINUTES,
     SUN_STOP_MINUTES,
+    UNWANTED_REPEAT_MINUTES,
+    UNWANTED_STOP_MINUTES,
 )
 from . import ChargerDriver, driver_for
 
@@ -268,7 +271,7 @@ class ChargerControl:
                        + (quarter.get("carLabel") or "pas de recharge prévue maintenant"))
             await self._free_phases(name, driver, state, test, "Fin de la recharge pilotée")
             return
-        # On / off: only when the planning changes its mind (a manual change holds until then)
+        # On / off: when the planning changes its mind; a charge going on that it does not want is stopped further down
         if want != state["want"]:
             state["want"] = want
             state["pending_start"] = want
@@ -280,6 +283,8 @@ class ChargerControl:
                 if was_sun and state.get("sun_floor"):
                     reason = (f"Soleil sous le talon ({round(float(data.get('houseBaseKw') or 0) * 1000)} W) "
                               f"depuis {SUN_STOP_MINUTES} min")
+                # Sent again later only if the charge goes on (UNWANTED_REPEAT_MINUTES)
+                state["unwanted_stop_at"] = now
                 if await send("stop", driver.stop, reason):
                     state["stopped_at"] = now
             if not want:
@@ -348,19 +353,28 @@ class ChargerControl:
                 block(f"Statut {status} : pas de démarrage, rien jusqu'au débranchement")
                 return
 
-        known = driver.current_a() if not test else state["current"]
         if not want:
             state["current"] = None
-            # A charge started by hand, lowered for the connection: its current given back as the import comes down
-            if state["manual"] is not None and driver.is_running():
-                cap = self._grid_cap(driver, phases, GRID_RAISE_MARGIN_W)
-                amperes = state["manual"] if cap is None else max(low, min(state["manual"], cap))
-                if known is not None and amperes > known:
-                    if await send(f"{amperes} A", lambda: driver.set_current(amperes), "Import redescendu", current_a=amperes):
-                        state["current"] = amperes
-                if amperes >= state["manual"]:
-                    state["manual"] = None
+            state["manual"] = None
+            # A charge the settings do not want (no grid charge planned now: over the highest price, the level reached…, no
+            # sun): stopped, whoever started it, after UNWANTED_STOP_MINUTES, again every UNWANTED_REPEAT_MINUTES while it goes on
+            if not driver.is_running():
+                state["unwanted_since"] = None
+                return
+            state["unwanted_since"] = state.get("unwanted_since") or now
+            last = state.get("unwanted_stop_at")
+            if (now - state["unwanted_since"] >= timedelta(minutes=UNWANTED_STOP_MINUTES)
+                    and (last is None or now - last >= timedelta(minutes=UNWANTED_REPEAT_MINUTES))):
+                label = quarter.get("carLabel") or "Pas de recharge prévue"
+                price = quarter.get("price")
+                reason = (f"Recharge non voulue par les réglages ({label}"
+                          + (f", réseau à {float(price) * 100:.2f} ct" if price is not None else "") + ")")
+                state["unwanted_stop_at"] = now
+                if await send("stop", driver.stop, reason):
+                    state["stopped_at"] = now
+                    await self._free_phases(name, driver, state, test, "Fin de la recharge non voulue")
             return
+        state["unwanted_since"] = None
         # Only a charge actually running is regulated (its live status): a car not plugged in, or plugged in and not charging,
         # gets its current when it starts (set before the start), not every minute from the planning and the import
         if not driver.is_running():

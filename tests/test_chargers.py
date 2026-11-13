@@ -143,7 +143,7 @@ class FakeEasee:
             if command in ("resume", "start") and self.status in ("awaiting_start", "ready_to_charge", "awaiting_authorization"):
                 self.status = "charging" if self.car_takes else "ready_to_charge"
                 self.session_mode = self.phase_mode
-            elif command == "pause" and self.status in ("charging", "ready_to_charge"):
+            elif command == "pause" and self.status in ("charging", "ready_to_charge") and getattr(self, "obeys_pause", True):
                 self.status = "awaiting_start"
         elif service == "set_charger_dynamic_limit":
             self.current = int(data["current"])
@@ -284,13 +284,27 @@ class ControlTests(unittest.IsolatedAsyncioTestCase):
         await h.tick(planning("charge"), minutes=6)
         self.assertEqual(h.station.sent(), ["start"])
 
-    async def test_a_manual_start_holds_until_the_planning_changes(self):
+    async def test_a_charge_the_settings_do_not_want_is_stopped(self):
         h = Harness(FakeWallbox(status="Preparing"))
         await h.tick(planning("wait"))
-        # Started from the app outside the slot
+        # Started from the app (or by the car) while the grid costs more than the highest price: a moment given first
         h.station.status = "Charging"
         await h.tick(planning("wait"), minutes=1)
+        await h.tick(planning("wait"), minutes=2)
         self.assertEqual(h.station.sent(), [])
+        # Still charging two minutes later: stopped
+        await h.tick(planning("wait"), minutes=3)
+        self.assertEqual(len(h.station.sent()), 1)
+        self.assertTrue(any(a == "stop" and r.startswith("Recharge non voulue par les réglages") for a, r in h.log))
+
+    async def test_a_stop_not_followed_is_sent_again_every_five_minutes(self):
+        # The station paused, but the charge goes on (the car or the station starting it again)
+        h = Harness(FakeEasee(status="charging", current=16), charger=EASEE)
+        h.station.obeys_pause = False
+        for minute in range(0, 13):
+            await h.tick(planning("wait", charger="Easee"), minutes=minute)
+        # Stopped at once (the planning wants none), again at 5 and 10 minutes
+        self.assertEqual(h.station.sent().count("pause"), 3)
 
     async def test_waits_for_the_car_to_be_plugged_in(self):
         h = Harness(FakeWallbox(status="Available", current=6))
@@ -610,11 +624,15 @@ class PlugInTests(unittest.IsolatedAsyncioTestCase):
         await h.tick(self.waiting())
         h.station.status = "awaiting_start"
         await h.tick(self.waiting(), minutes=1)
-        # Started from its app half an hour later: not stopped
+        # Started from its app half an hour later while nothing is wanted: stopped after two minutes
         h.station.status = "charging"
-        await h.tick(self.waiting(), minutes=30)
-        await h.tick(self.waiting(), minutes=31)
+        fresh = lambda: planning("wait", source="none", mode="best_price", charger="Easee", phases=3,
+                                 generated=NOW + timedelta(minutes=30))
+        await h.tick(fresh(), minutes=30)
+        await h.tick(fresh(), minutes=31)
         self.assertNotIn("pause", h.station.sent())
+        await h.tick(fresh(), minutes=32)
+        self.assertIn("pause", h.station.sent())
 
     async def test_a_charge_planned_is_not_stopped(self):
         h = Harness(FakeEasee(status="disconnected", current=16), charger=EASEE)
@@ -912,7 +930,7 @@ class GridLimitTests(unittest.IsolatedAsyncioTestCase):
         await h.protect(planning("charge"), minutes=0.3)
         self.assertEqual(h.station.sent(), ["13 A"])
 
-    async def test_a_charge_started_by_hand_is_protected_and_given_back(self):
+    async def test_a_charge_started_by_hand_is_protected_then_stopped(self):
         h = Harness(FakeWallbox(status="Charging", current=16), grid=11000, grid_max_w=12000)
         await h.tick(planning("wait"), minutes=0)
         h.station.calls.clear()
@@ -920,9 +938,14 @@ class GridLimitTests(unittest.IsolatedAsyncioTestCase):
         h.grid = 13500
         await h.protect(planning("wait"), minutes=0.5)
         self.assertEqual(h.station.sent(), ["13 A"])
+        # Started again by hand after the stop of the planning, not wanted by the settings: stopped again 5 minutes after it
         h.grid = 9500
         await h.tick(planning("wait"), minutes=1)
-        self.assertEqual(h.station.sent(), ["13 A", "16 A"])
+        self.assertEqual(h.station.sent(), ["13 A"])
+        await h.tick(planning("wait"), minutes=4)
+        self.assertEqual(len(h.station.sent()), 1)
+        await h.tick(planning("wait"), minutes=5)
+        self.assertEqual(len(h.station.sent()), 2)
 
     async def test_solar_first_stays_on_the_surplus(self):
         h = Harness(FakeWallbox(status="Charging", current=6), production=9000, grid=-2000, battery=1000, grid_max_w=12000)

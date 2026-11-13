@@ -123,6 +123,11 @@ SUN_RESTART_MINUTES = 15
 # A charge the station starts by itself this long after the car is plugged in, while the planning wants none, is stopped (later
 # on, a charge started by hand from its app holds)
 PLUG_START_WINDOW_MINUTES = 10
+# A charge going on that the settings do not want (started by the station, the car, its app or by hand; a stop not followed): stopped
+# once seen for UNWANTED_STOP_MINUTES (a station still showing the charge just after a stop is given time), again every
+# UNWANTED_REPEAT_MINUTES while it goes on
+UNWANTED_STOP_MINUTES = 2
+UNWANTED_REPEAT_MINUTES = 5
 # A station that switches, on such a surplus: three phases once it reaches the lowest three-phase current with this margin, one
 # when it falls under it by this margin; up to three held SUN_STOP_MINUTES first (each change pauses and starts the charge again),
 # down to one after SUN_PHASE_DOWN_MINUTES (three phases at their lowest current buy from the grid meanwhile)
