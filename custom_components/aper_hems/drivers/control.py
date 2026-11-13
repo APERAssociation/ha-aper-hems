@@ -39,6 +39,7 @@ from ..const import (
     SUN_BATTERY_STOP_KWH,
     SUN_PHASE_DOWN_MINUTES,
     SUN_PHASE_MARGIN_W,
+    SUN_PHASE_UP_HOLD_MINUTES,
     PLUG_START_WINDOW_MINUTES,
     SUN_RESTART_MINUTES,
     SUN_START_MINUTES,
@@ -284,7 +285,7 @@ class ChargerControl:
             if not want:
                 await self._free_phases(name, driver, state, test, "Fin de la recharge pilotée")
         # A station that switches between one and three phases: the phases the planning wants, set before a start and when
-        # they change; a charge in progress is not paused for it, the station switches by itself
+        # they change; during a charge the driver pauses it around the switch (the car keeps the phases of its session)
         if (want and self._switches(charger, driver) and not driver.is_unplugged() and state["phases"] != phases):
             words = "monophasé" if phases == 1 else "triphasé"
             if await send(f"{phases} phase" + ("s" if phases > 1 else ""), lambda: driver.set_phases(phases),
@@ -397,8 +398,13 @@ class ChargerControl:
             state["sun_phases_since"] = state.get("sun_phases_since") or now
             # Down to one phase soon (three phases at their lowest current buy from the grid), up to three only after a while
             wait = SUN_PHASE_DOWN_MINUTES if target == 1 else SUN_STOP_MINUTES
-            if now - state["sun_phases_since"] >= timedelta(minutes=wait):
+            # Never back up to three soon after going down to one (no switch, so no pause, at each passing cloud)
+            down_at = state.get("sun_phases_down_at")
+            held = target == 3 and down_at is not None and now - down_at < timedelta(minutes=SUN_PHASE_UP_HOLD_MINUTES)
+            if now - state["sun_phases_since"] >= timedelta(minutes=wait) and not held:
                 state.update(sun_phases=target, sun_phases_since=None)
+                if target == 1:
+                    state["sun_phases_down_at"] = now
         return state["sun_phases"]
 
     def _sun(self, data: dict, quarter: dict, charger: dict, driver: ChargerDriver, state: dict, phases: int, now: datetime,

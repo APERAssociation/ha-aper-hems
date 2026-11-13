@@ -128,6 +128,9 @@ PLUG_START_WINDOW_MINUTES = 10
 # down to one after SUN_PHASE_DOWN_MINUTES (three phases at their lowest current buy from the grid meanwhile)
 SUN_PHASE_MARGIN_W = 300
 SUN_PHASE_DOWN_MINUTES = 1
+# Back up to three phases never sooner than this after going down to one: a sun hesitating around the three-phase threshold
+# (passing clouds) does not pause the charge every few minutes; three phases at most every SUN_PHASE_UP_HOLD_MINUTES
+SUN_PHASE_UP_HOLD_MINUTES = 15
 # "Solaire d'abord" with the house's base load sent by the site (the car under its level wanted): a charge starts once the sun
 # makes more than the base load for SUN_START_MINUTES and keeps at least its lowest current while it does (none of the sun
 # exported, what it does not give is bought), stopped once under it for SUN_STOP_MINUTES. Meanwhile the battery of the house gives

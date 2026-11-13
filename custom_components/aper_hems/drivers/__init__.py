@@ -7,6 +7,8 @@ driver is not driven.
 
 from __future__ import annotations
 
+import asyncio
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -144,6 +146,12 @@ class EaseeDriver(ChargerDriver):
     SWITCHES_PHASES = True
     # Its firmware waits about five minutes before a start at 6 A (as seen by evcc): started at 7 A at least
     START_MIN_CURRENT = 7
+    # A change of phases during a charge: the car keeps the phases it took at the start of its session (the pilot signal does
+    # not carry them; a car stayed at 16 A on one phase with the station locked on three), so the charge is paused, the
+    # phases changed, then resumed: about ten seconds, as the plugin Pilote did
+    PHASE_PAUSE_SECONDS = 3
+    PHASE_SWITCH_SECONDS = 5
+    PHASE_RESUME_SECONDS = 2
 
     def __init__(self, hass: HomeAssistant, charger: dict) -> None:
         super().__init__(hass, charger)
@@ -199,7 +207,20 @@ class EaseeDriver(ChargerDriver):
 
     async def set_phases(self, phases: int) -> None:
         mode = {1: "1_phase", 3: "3_phase"}.get(phases, "auto_phase")
+        # Locked to one or three phases while the car charges: paused, switched, resumed (left to the station's choice: only
+        # once a charge is over, nothing to pause)
+        running = phases in (1, 3) and self.is_running()
+        if running:
+            await self._call("action_command", action_command="pause")
+            await asyncio.sleep(self.PHASE_PAUSE_SECONDS)
         await self._call("set_charger_phase_mode", phase_mode=mode)
+        if running:
+            await asyncio.sleep(self.PHASE_SWITCH_SECONDS)
+            await self._call("action_command", action_command="resume")
+            await asyncio.sleep(self.PHASE_RESUME_SECONDS)
+            # A station that asks for an authorization again opens the session with "start"
+            if self.status() in ("awaiting_authorization", "awaiting_authentication"):
+                await self._call("action_command", action_command="start")
 
 
 DRIVERS: dict[str, type[ChargerDriver]] = {
